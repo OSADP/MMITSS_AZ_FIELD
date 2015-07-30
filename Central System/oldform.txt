@@ -1,0 +1,104 @@
+<form id="contact-form" action="http://mmitss.webhost.uits.arizona.edu/sites/default/files/config.txt" method="post">
+<ul>
+  <li>Coordination: 
+  <label for="yes">Yes</label> <input type="checkbox" name="yes" id="yes" value="yes">
+      <label for="no">No</label> <input type="checkbox" name="no" id="no" value="no">
+  </li>
+
+<ul>
+
+<li>
+Number of Coordinated Intersections: <input type="text" size="2" name="numintersection"><br>
+</li>
+
+
+<li>
+<label for="comments">Name of Coordinated Intersections:</label> <br><textarea name="intname" id="intname" cols="25" rows="6"></textarea>
+</li>
+
+
+<li>
+Coordination Weight:<input type="text" size="2" name="coorweight"><br>
+</li>
+
+
+</ui>
+<li>
+Section N-Level Priority Hierarcy:<br>
+ (Modes with smaller value have higher level of importance)<br>
+
+<ul>
+<li>
+Emergerncy Vehicles <br>
+Police:<input type="text" size="2" name="policelevel"><br>
+Fire Trucks:    <input type="text" size="2" name="firetrucklevel"><br>
+Ambulance:
+<input type="text" size="2" name="ambulancelevel"><br>
+</li>
+
+<li>
+Transit<br>
+Light Rail:<input type="text" size="2" name="lightraillevel"><br>
+Street Car:    <input type="text" size="2" name="streetcarlevel"><br>
+Bus Rapid Transit:
+<input type="text" size="2" name="busrapidtransitlevel"><br>
+Local Bus:<input type="text" size="2" name="lightraillevel"><br>
+
+</li>
+
+<li>
+Trucks<br>
+Commercial:<input type="text" size="2" name="commercialllevel"><br>
+Perishable Delivery:    <input type="text" size="2" name="perishabledeliverylevel"><br>
+Non-Perishable Delivery:    <input type="text" size="2" name="nonperishabledeliverylevel"><br>
+
+</li>
+
+
+<li>
+Non-Motorized<br>
+Pedestrian:<input type="text" size="2" name="pedestrianllevel"><br>
+Disable:    <input type="text" size="2" name="handicapelevel"><br>
+Bicycle:    <input type="text" size="2" name="bicyclelevel"><br>
+</ll>
+
+</ul>
+</ul>
+</li>
+
+  <li>Desired Section-Level MOE:
+
+   <ul>
+      <li><label for="TravelTimepermode">Average Travel Time per Mode</label> <input type="checkbox" name="TravelTimepermode" id="TravelTimepermode" value="TravelTimepermode">
+</li>
+
+
+   <li><label for="AverageSpeedpermode">Average Speed per Mode</label> <input type="checkbox" name="AverageSpeedpermode" id="AverageSpeedpermode" value="AverageSpeedpermode">
+</li>
+
+ <li><label for="AverageSpeedpermode">Average Number of Stops per Mode</label> <input type="checkbox" name="AverageSpeedpermode" id="AverageSpeedpermode" value="AverageSpeedpermode">
+</li>
+
+ <li><label for="AverageSpeedpermode">Average System Speed</label> <input type="checkbox" name="AverageSpeedpermode" id="AverageSpeedpermode" value="AverageSpeedpermode">
+</li>
+
+
+ <li><label for="AverageSpeedpermode">Total Travel Time</label> <input type="checkbox" name="AverageSpeedpermode" id="AverageSpeedpermode" value="AverageSpeedpermode">
+</li>
+
+ <li><label for="AverageSpeedpermode">Bandwidth Efficiency (If Coordinated)</label> <input type="checkbox" name="AverageSpeedpermode" id="AverageSpeedpermode" value="AverageSpeedpermode">
+</li>
+
+ 
+ <li><label for="AverageSpeedpermode">Bandwidth Attainability (If Coordinated)</label> <input type="checkbox" name="AverageSpeedpermode" id="AverageSpeedpermode" value="AverageSpeedpermode">
+</li>
+
+ 
+    </ul>
+  </li>
+
+
+
+<input type="submit" value="Submit" />
+
+</form>

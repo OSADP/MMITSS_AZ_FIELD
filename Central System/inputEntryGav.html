@@ -1,0 +1,657 @@
+
+
+
+<!DOCTYPE html>
+<!--
+  Copyright 2011 Google Inc. All Rights Reserved.
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+<html>
+  <head>
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
+    <meta charset="UTF-8">
+	
+	<style>
+	#map-canvas {
+	width: 500px;
+	height: 400px;
+	}
+	p{
+	margin-left:5em
+	}
+	span.tab{
+    padding: 0 40px; /* Or desired space*/
+	}
+
+	</style>
+    <title>MMITSS WebServer</title>
+
+    <link href="/apis/fusiontables/docs/samples/style/default.css"
+        rel="stylesheet" type="text/css">
+    <script type="text/javascript"
+        src="http://maps.google.com/maps/api/js?key=AIzaSyDq5YIplWEzlmSF7cyqBQVKs3w4ZoUPMBM&sensor=false"></script>
+
+    <script type="text/javascript">
+      function initialize() {
+        var tableId = '12UYrhJyFWEuRY2aR2o4ilh9EB0otidBWCrkNJ2oi';  
+
+        var map = new google.maps.Map(document.getElementById('map-canvas'), {
+          center: new google.maps.LatLng(33.8499, -112.1235),
+          zoom: 14,
+          mapTypeId: google.maps.MapTypeId.ROADMAP
+        });
+
+        var layer = new google.maps.FusionTablesLayer();
+        filterMap(layer, tableId, map);
+
+        google.maps.event.addDomListener(document.getElementById('GavilanPeak'),
+            'click', function() {
+              filterMap(layer, tableId, map);
+        });
+
+        google.maps.event.addDomListener(document.getElementById('Dedication'),
+            'click', function() {
+              filterMap(layer, tableId, map);
+        });
+
+        google.maps.event.addDomListener(document.getElementById('Meridian'),
+            'click', function() {
+              filterMap(layer, tableId, map);
+        });
+		
+		 google.maps.event.addDomListener(document.getElementById('Hasting'),
+            'click', function() {
+              filterMap(layer, tableId, map);
+        });
+		
+		 google.maps.event.addDomListener(document.getElementById('Memorial'),
+            'click', function() {
+              filterMap(layer, tableId, map);
+        });
+		
+		 google.maps.event.addDomListener(document.getElementById('Anthem'),
+            'click', function() {
+              filterMap(layer, tableId, map);
+        });
+      }
+
+      // Filter the map based on checkbox selection.
+      function filterMap(layer, tableId, map) {
+        var Where = generateWhere();
+
+        if (Where) {
+          if (!layer.getMap()) {
+            layer.setMap(map);
+          }
+          layer.setOptions({
+            query: {
+              select: 'IntersectionName',
+              from: tableId,
+              where: Where
+            }
+          });
+        } else {
+          layer.setMap(null);
+        }
+      }
+
+      // Generate a where clause from the checkboxes. If no boxes
+      // are checked, return an empty string.
+      function generateWhere() {
+        var filter = [];
+        var intersections = document.getElementsByName('intersection');
+	
+        for (var i = 0, intersection; intersection = intersections[i]; i++) {
+          if (intersection.checked) {
+            var intersectionName = intersection.value.replace(/'/g, '\\\'');
+            filter.push("'" + intersectionName + "'");
+          }
+        }
+        var Where = '';
+        if (filter.length) {
+          Where = "'IntersectionName' IN (" + filter.join(',') + ')';
+        }
+        return Where;
+      }
+
+      google.maps.event.addDomListener(window, 'load', initialize);
+    </script>
+  </head>
+  <body>
+  
+    
+	<div align="right" > <a href="firstPage.html" > Logout </a>  </div>
+	<center> <H1> Multi-Modal Intelligent Traffic Signal Systems </H1> </center>  
+	<center> <H2> User Interface </H2> </center>
+	
+	
+	<table style="width:100%">
+	  <tr>
+		<td> <center>  <a href="inputEntry.html"> <H3>  Configuration Manager  </H3> </a> </center>  </td>
+		<td> <center> <a   href="performance.html"> <H3>  Performance Observer </H3>  </a> </center>  </td>		
+	  </tr>
+	</table>
+	
+	<hr size="10" noshade>
+	
+	
+	
+	<center> 
+	<div id="map-canvas"></div>
+	<br>
+	<br>
+	<br>
+	<H1> Active MMITSS Intersections :  </H1> 
+	<H3>
+	<form id="GoToGavForm" name="myFormName" action="sendFileGavilan.php" method="post" >
+    <div>
+      <input type="checkbox"  name="intersection"
+          id="GavilanPeak" value="GavilanPeak" onclick="checkIntersection(this.value)"  >
+      <label> Gavilan Peak-Daisy Mountain Dr </label>   <input type="submit" value=" Go To Configuration"> 
+     </div>
+	 </form>
+	    <br>
+		
+		<form id="GoToDedForm" name="myFormName" action="sendFileDedidication.php" method="post" >
+	  <div>
+	  <input type="checkbox"  name="intersection"
+          id="Dedication" value="Dedication" onclick="checkIntersection(this.value)">
+      <label>Dedication-Daisy Mountain Dr</label>   <input type="submit" value=" Go To Configuration"> 
+       </div>
+	  </form> 
+	   <br>
+	  
+	  <form id="GoToMerForm" name="myFormName" action="sendFileMeridian.php" method="post" >
+	  <div>  
+	  <input type="checkbox"  name="intersection"
+          id="Meridian" value="Meridian" onclick="checkIntersection(this.value)">
+      <label>Meridian-Daisy Mountain Dr</label>  <input type="submit" value=" Go To Configuration"> 
+	  </div> 
+	  </form>
+	  
+	  <br>
+	    <form id="GoToHasForm" name="myFormName" action="sendFileHasting.php" method="post" >
+	   <div>
+	  <input type="checkbox"  name="intersection"
+          id="Hasting" value="Hasting" onclick="checkIntersection(this.value)">
+      <label>Hasting-Daisy Mountain Dr</label>  <input type="submit" value=" Go To Configuration"> 
+	   </div> 
+	  </form>
+	  
+	   <br>
+	    <div>
+	  <input type="checkbox"  name="intersection"
+          id="Memorial" value="Memorial" onclick="checkIntersection(this.value)">
+      <label>Memorial-Daisy Mountain Dr</label>  <input type="submit" value=" Go To Configuration"> 
+		</div> 
+		<br>
+		<div>
+	  <input type="checkbox"  name="intersection"
+          id="Anthem" value="Anthem" onclick="checkIntersection(this.value)">
+      <label>Anthem-Daisy Mountain Dr</label>  <input type="submit" value=" Go To Configuration"> 
+	 </div>
+	 </H3>
+	</center>
+	
+	
+  <br><br><br> 
+	
+	<form id="myForm" name="myFormName" action="sendFile.php" method="post" >
+	<table style="width:100%">
+	  <tr>
+		<td> 
+		
+	
+	
+	
+	<p>
+	
+	<H2>
+	<input type="checkbox"  name="GavilanPeakConfig"
+          id="GavilanConfig" value="GavilanPeak"  > <lable> Gavilan Peak - Daisy Mountain Dr. Configuration: </lable> </H2> 
+			
+			 <H3>
+				<span class="tab"></span> 
+				  
+				Is it coordinated?
+				<input type="checkbox"  name="GavCoordCheckBox"
+					  id="GavilanCoord" value="GavilanCoord"  > 
+					  <br>
+				
+						<span class="tab"></span>
+					    &nbsp    &nbsp	Coordination Weight:
+						<input type="range" id="GavCoordW" min="0" max="100" value="0" step="5" name="GavilanCoordWeight" onchange="showValue(this.id,this.value)" />
+						<span id="rangeGavCoordW">0</span>
+						 <br>
+						<span class="tab"></span>
+						 &nbsp    &nbsp  Cycle: <input type='text'size='3' name='GavilanCycle'>
+						 <br>
+						<span class="tab"></span>
+						 &nbsp    &nbsp  Offset: <input type='text'size='3'  name='GavilanOffset'>
+						  <br>
+						<span class="tab"></span>
+						 &nbsp    &nbsp  Coordinated Phase: <input type='text'size='3'  name='GavilanCoordPhase'>
+						 <br>
+						<span class="tab"></span>
+						 &nbsp   &nbsp Coordinated Phase Split: <input type='text' size='3' name='GavilanSplit'>
+					
+				<br>
+				<br>
+					<span class="tab"></span>
+				Does EV Override?
+				<input type="checkbox"  name="GavEVCheckBox"
+					  id="GavilanEV" value="GavilanEV"  > 
+				 <br>	
+				<br>
+				<span class="tab"></span>
+				 Priority Weights:
+				 <br>
+				  <span class="tab"></span>
+					 &nbsp   &nbsp &nbsp   &nbsp Truck  &nbsp  &nbsp 0
+					 <input type="range"  id="GavTrkW" min="0" max="100" value="0" step="5" name="GavilanTruckWeight" onchange="showValue(this.id,this.value)" /> 
+					 <span id="rangeGavTrkW">100</span>  &nbsp    
+				<br> 
+				
+				  <span class="tab"></span>
+					 &nbsp   &nbsp &nbsp   &nbsp Transit   &nbsp 0
+					 <input type="range"  id="GavTrnW" min="0" max="100" value="0" step="5" name="GavilanTransitWeight" onchange="showValue(this.id,this.value)" /> 
+					 <span id="rangeGavTrnW">100</span>  &nbsp
+				 <br>
+				 
+				 <span class="tab"></span>
+					 &nbsp   &nbsp &nbsp   &nbsp Truck   &nbsp  &nbsp
+					 <span id="rangeGavTrkTrnW">50</span> 
+					 <input type="range"  id="GavTrkTrnW" min="0" max="100" value="50" step="5" name="GavilanTruckTransitWeight" onchange="showValue(this.id,this.value)" /> 
+					 <span id="rangeGavTrnTrkW">50</span> &nbsp    Transit
+					 <br>
+					 
+			 </H3>		 
+	
+  
+					 
+	</p>
+	</td>
+	<td>
+	<p>
+
+	<input type="checkbox"  name="DedicationConfig"
+          id="DedicationConfig" value="Dedication"  > <b>Dedication Configuration:</b> 
+			<br> <br>
+				<span class="tab"></span> 
+				Is it coordinated?
+				<input type="checkbox"  name="DedCoordCheckBox"
+					  id="DedicationCoord" value="DedicationCoord"  > 
+					  <br>
+				
+						<span class="tab"></span>
+					    &nbsp    &nbsp	Coordination Weight:
+						<input type="range" id="DedCoordW" min="0" max="100" value="0" step="5" name="DedicationCoordWeight" onchange="showValue(this.id,this.value)" />
+						<span id="rangeDedCoordW">0</span>
+						 <br>
+						<span class="tab"></span>
+						 &nbsp    &nbsp  Cycle  : <input type='text'size='3' name='DedicationCycle'>
+						 <br>
+						<span class="tab"></span>
+						 &nbsp    &nbsp  Offset : <input type='text'size='3'  name='DedicationOffset'>
+						 <br>
+						<span class="tab"></span>
+						 &nbsp   &nbsp Split &nbsp  : <input type='text' size='3' name='DedicationSplit'>
+					
+				<br>
+				<span class="tab"></span>
+				 Priority Weights:
+				 <br>
+				 <span class="tab"></span>
+					 &nbsp   &nbsp &nbsp   &nbsp Truck   &nbsp
+					 <span id="rangeDedTrkTrnW">50</span> 
+					 <input type="range"  id="DedTrkTrnW" min="0" max="100" value="50" step="5" name="DedicationTruckTransitWeight" onchange="showValue(this.id,this.value)" /> 
+					 <span id="rangeDedTrnTrkW">50</span> &nbsp    Transit
+					 <br>
+	
+	</p>
+					 
+	
+	
+	</td>		
+	
+	<td>
+	<p>
+
+	<input type="checkbox"  name="MeridianConfig"
+          id="MeridianConfig" value="Meridian"  > <b>Meridian Configuration:</b> 
+			<br> <br>
+				<span class="tab"></span> 
+				Is it coordinated?
+				<input type="checkbox"  name="MerCoordCheckBox"
+					  id="MeridianCoord" value="MeridianCoord"  > 
+					  <br>
+				
+						<span class="tab"></span>
+					    &nbsp    &nbsp	Coordination Weight:
+						<input type="range" id="MerCoordW" min="0" max="100" value="0" step="5" name="MeridianCoordWeight" onchange="showValue(this.id,this.value)" />
+						<span id="rangeMerCoordW">0</span>
+						 <br>
+						<span class="tab"></span>
+						 &nbsp    &nbsp  Cycle  : <input type='text'size='3' name='MeridianCycle'>
+						 <br>
+						<span class="tab"></span>
+						 &nbsp    &nbsp  Offset : <input type='text'size='3'  name='MeridianOffset'>
+						 <br>
+						<span class="tab"></span>
+						 &nbsp   &nbsp Split &nbsp  : <input type='text' size='3' name='MeridianSplit'>
+					
+				<br>
+				<span class="tab"></span>
+				 Priority Weights:
+				 <br>
+				 <span class="tab"></span>
+					 &nbsp   &nbsp &nbsp   &nbsp Truck   &nbsp
+					 <span id="rangeMerTrkTrnW">50</span> 
+					 <input type="range"  id="MerTrkTrnW" min="0" max="100" value="50" step="5" name="MeridianTruckTransitWeight" onchange="showValue(this.id,this.value)" /> 
+					 <span id="rangeMerTrnTrkW">50</span> &nbsp    Transit
+					 <br>
+ 
+	</p>
+	
+	</td>		
+	</tr>
+	
+	<tr>
+	 <td>
+	 <br><br><br> 
+	<p>
+	
+	<input type="checkbox"  name="HastingConfig"
+          id="HastingConfig" value="Hasting"  > <b>Hasting Configuration:</b> 
+			<br> <br>
+				<span class="tab"></span> 
+				Is it coordinated?
+				<input type="checkbox"  name="HasCoordCheckBox"
+					  id="HastingCoord" value="HastingCoord"  > 
+					  <br>
+				
+						<span class="tab"></span>
+					    &nbsp    &nbsp	Coordination Weight:
+						<input type="range" id="HasCoordW" min="0" max="100" value="0" step="5" name="HastingCoordWeight" onchange="showValue(this.id,this.value)" />
+						<span id="rangeHasCoordW">0</span>
+						 <br>
+						<span class="tab"></span>
+						 &nbsp    &nbsp  Cycle  : <input type='text'size='3' name='HastingCycle'>
+						 <br>
+						<span class="tab"></span>
+						 &nbsp    &nbsp  Offset : <input type='text'size='3'  name='HastingOffset'>
+						 <br>
+						<span class="tab"></span>
+						 &nbsp   &nbsp Split &nbsp  : <input type='text' size='3' name='HastingSplit'>
+					
+				<br>
+				<span class="tab"></span>
+				 Priority Weights:
+				 <br>
+				 <span class="tab"></span>
+					 &nbsp   &nbsp &nbsp   &nbsp Truck   &nbsp
+					 <span id="rangeHasTrkTrnW">50</span> 
+					 <input type="range"  id="HasTrkTrnW" min="0" max="100" value="50" step="5" name="HastingTruckTransitWeight" onchange="showValue(this.id,this.value)" /> 
+					 <span id="rangeHasTrnTrkW">50</span> &nbsp    Transit
+					 <br>
+	</p>
+	</td>		
+	
+	
+	<td>
+	<br><br><br> 
+	<p>
+	
+	<input type="checkbox"  name="MemorialConfig"
+          id="MemorialConfig" value="Memorial"  > <b>Memorial Configuration:</b> 
+			<br> <br>
+				<span class="tab"></span> 
+				Is it coordinated?
+				<input type="checkbox"  name="MerCoordCheckBox"
+					  id="MemorialCoord" value="MemorialCoord"  > 
+					  <br>
+				
+						<span class="tab"></span>
+					    &nbsp    &nbsp	Coordination Weight:
+						<input type="range" id="MemCoordW" min="0" max="100" value="0" step="5" name="MemorialCoordWeight" onchange="showValue(this.id,this.value)" />
+						<span id="rangeMemCoordW">0</span>
+						 <br>
+						<span class="tab"></span>
+						 &nbsp    &nbsp  Cycle  : <input type='text'size='3' name='MemorialCycle'>
+						 <br>
+						<span class="tab"></span>
+						 &nbsp    &nbsp  Offset : <input type='text'size='3'  name='MemorialOffset'>
+						 <br>
+						<span class="tab"></span>
+						 &nbsp   &nbsp Split &nbsp  : <input type='text' size='3' name='MemorialSplit'>
+					
+				<br>
+				<span class="tab"></span>
+				 Priority Weights:
+				 <br>
+				 <span class="tab"></span>
+					 &nbsp   &nbsp &nbsp   &nbsp Truck   &nbsp
+					 <span id="rangeMemTrkTrnW">50</span> 
+					 <input type="range"  id="MemTrkTrnW" min="0" max="100" value="50" step="5" name="MemorialTruckTransitWeight" onchange="showValue(this.id,this.value)" /> 
+					 <span id="rangeMemTrnTrkW">50</span> &nbsp    Transit
+					 <br>
+	</p>
+	</td>		
+	
+	<td>
+	<br><br><br> 
+	<p>
+	
+	<input type="checkbox"  name="AnthemConfig"
+          id="AnthemConfig" value="Anthem"  > <b>Anthem Configuration:</b> 
+			<br> <br>
+				<span class="tab"></span> 
+				Is it coordinated?
+				<input type="checkbox"  name="AntCoordCheckBox"
+					  id="AnthemCoord" value="AnthemCoord"  > 
+					  <br>
+				
+						<span class="tab"></span>
+					    &nbsp    &nbsp	Coordination Weight:
+						<input type="range" id="AntCoordW" min="0" max="100" value="0" step="5" name="AnthemCoordWeight" onchange="showValue(this.id,this.value)" />
+						<span id="rangeAntCoordW">0</span>
+						 <br>
+						<span class="tab"></span>
+						 &nbsp    &nbsp  Cycle  : <input type='text'size='3' name='AnthemCycle'>
+						 <br>
+						<span class="tab"></span>
+						 &nbsp    &nbsp  Offset : <input type='text'size='3'  name='AnthemOffset'>
+						 <br>
+						<span class="tab"></span>
+						 &nbsp   &nbsp Split &nbsp  : <input type='text' size='3' name='AnthemSplit'>
+					
+				<br>
+				<span class="tab"></span>
+				 Priority Weights:
+				 <br>
+				 <span class="tab"></span>
+					 &nbsp   &nbsp &nbsp   &nbsp Truck   &nbsp
+					 <span id="rangeAntTrkTrnW">50</span> 
+					 <input type="range"  id="AntTrkTrnW" min="0" max="100" value="50" step="5" name="AnthemTruckTransitWeight" onchange="showValue(this.id,this.value)" /> 
+					 <span id="rangeAntTrnTrkW">50</span> &nbsp    Transit
+					 <br>
+	</p>
+	
+	</td>		
+	
+	
+	 </tr>
+	</table>
+	
+	
+	<br> <br>
+	<center>  <input type="submit" value=" Submit To the RSEs"> </center>
+	</form>
+	
+  
+  
+  
+    
+	  
+	<SCRIPT TYPE="text/javascript">
+	function checkIntersection(inter)
+	{
+	if ((inter="GavilanPeak")&&(GavilanPeak.checked==true))
+	   {
+		GavilanConfig.checked = true;
+	   }
+	if ((inter="GavilanPeak")&&(GavilanPeak.checked==false))
+		{
+		GavilanConfig.checked = false;
+	   }
+	if ((inter="Dedication")&&(Dedication.checked==true))
+	   {
+		DedicationConfig.checked = true;
+	   }
+	if ((inter="Dedication")&&(Dedication.checked==false))
+		{
+		DedicationConfig.checked = false;
+	   }
+	if ((inter="Meridian")&&(Meridian.checked==true))
+	   {
+		MeridianConfig.checked = true;
+	   }
+	if ((inter="Meridian")&&(Meridian.checked==false))
+		{
+		MeridianConfig.checked = false;
+	   }
+	if ((inter="Hasting")&&(Hasting.checked==true))
+	   {
+		HastingConfig.checked = true;
+	   }
+	if ((inter="Hasting")&&(Hasting.checked==false))
+		{
+		HastingConfig.checked = false;
+	   }
+	if ((inter="Memorial")&&(Memorial.checked==true))
+	   {
+		MemorialConfig.checked = true;
+	   }
+	if ((inter="Memorial")&&(Memorial.checked==false))
+		{
+		MemorialConfig.checked = false;
+	   }
+	if ((inter="Anthem")&&(Anthem.checked==true))
+	   {
+		AnthemConfig.checked = true;
+	   }
+	if ((inter="Anthem")&&(Anthem.checked==false))
+		{
+		AnthemConfig.checked = false;
+	   }
+		
+	
+	}
+	</SCRIPT>	
+
+	<script type="text/javascript">
+	function showValue(id,newValue)
+	{
+		switch(id)
+		{
+		
+		case("GavCoordW"):
+			document.getElementById("rangeGavCoordW").innerHTML=newValue;
+			break;
+		case("GavTrkTrnW"):
+			{
+				document.getElementById("rangeGavTrkTrnW").innerHTML=newValue;
+				document.getElementById("rangeGavTrnTrkW").innerHTML=100-newValue;
+			}
+			break;
+		case("GavTrkW"):
+			{
+				document.getElementById("rangeGavTrkW").innerHTML=newValue;
+			}
+			break;
+		case("GavTrnW"):
+			{
+				document.getElementById("rangeGavTrnW").innerHTML=newValue;
+			}
+			break;
+		
+		
+		case("DedCoordW"):
+			document.getElementById("rangeDedCoordW").innerHTML=newValue;
+			break;
+		case("DedTrkTrnW"):
+			{
+				document.getElementById("rangeDedTrkTrnW").innerHTML=newValue;
+				document.getElementById("rangeDedTrnTrkW").innerHTML=100-newValue;
+			}
+			break;
+		
+		
+		case("MerCoordW"):
+			document.getElementById("rangeMerCoordW").innerHTML=newValue;
+			break;
+		case("MerTrkTrnW"):
+			{
+				document.getElementById("rangeMerTrkTrnW").innerHTML=newValue;
+				document.getElementById("rangeMerTrnTrkW").innerHTML=100-newValue;
+			}
+			break;
+		
+		
+		case("HasCoordW"):
+			document.getElementById("rangeHasCoordW").innerHTML=newValue;
+			break;
+		case("HasTrkTrnW"):
+			{
+				document.getElementById("rangeHasTrkTrnW").innerHTML=newValue;
+				document.getElementById("rangeHasTrnTrkW").innerHTML=100-newValue;
+			}
+			break;
+	
+		case("MemCoordW"):
+			document.getElementById("rangeMemCoordW").innerHTML=newValue;
+			break;
+		case("MemTrkTrnW"):
+			{
+				document.getElementById("rangeMemTrkTrnW").innerHTML=newValue;
+				document.getElementById("rangeMemTrnTrkW").innerHTML=100-newValue;
+			}
+			break;
+			
+			
+		case("AntCoordW"):
+			document.getElementById("rangeAntCoordW").innerHTML=newValue;
+			break;
+		case("AntTrkTrnW"):
+			{
+				document.getElementById("rangeAntTrkTrnW").innerHTML=newValue;
+				document.getElementById("rangeAntTrnTrkW").innerHTML=100-newValue;
+			}
+			break;
+	
+		}
+	}
+	function submitform()
+	{
+		document.forms["myform"].submit();
+	}
+	</script>
+
+	
+  </body>
+</html>
+
+
+
+

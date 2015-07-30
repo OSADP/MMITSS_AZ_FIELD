@@ -1,0 +1,56 @@
+body{
+background-color: WHITE;
+font-size: 10pt;
+
+}
+
+#logo > img{
+width: 500px;
+height:150px;
+float:center;
+left:500px;
+top:50%;
+position:relative;
+}
+
+#cv > img{
+position:relative;
+float:left;
+height:150px;
+width:400px;
+left:100px;
+}
+
+#tree{
+border: 4px solid gray;
+font-size:12pt;
+width: 300px;
+text-align: left;
+float: left;
+position:relative;
+display:inline-block;
+margin-top: 10px;
+left:100px;
+}
+
+#map{
+float:center;
+position:relative;
+margin-top:10px;
+display:inline-block;
+}
+
+#map > img{
+float:center;
+position:relative;
+left:80px;
+height: 400px;
+width:900px;
+}
+
+#pics{
+float:right;
+margin-right:50px;
+position:relative;
+
+}

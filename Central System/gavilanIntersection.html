@@ -1,0 +1,171 @@
+
+
+
+<!DOCTYPE html>
+<!--
+  Copyright 2011 Google Inc. All Rights Reserved.
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+<html>
+  <head>
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
+    <meta charset="UTF-8">
+	
+	<style>
+	#map-canvas {
+	width: 500px;
+	height: 400px;
+	}
+	p{
+	margin-left:5em
+	}
+	span.tab{
+    padding: 0 40px; /* Or desired space*/
+	}
+
+	</style>
+    <title>MMITSS WebServer</title>
+
+    <link href="/apis/fusiontables/docs/samples/style/default.css"
+        rel="stylesheet" type="text/css">
+   </head>
+  <body>
+  
+    
+	<div align="right" > <a href="firstPage.html" > Logout </a>  </div>
+	<center> <H1> Multi-Modal Intelligent Traffic Signal Systems </H1> </center>  
+	<center> <H2> User Interface </H2> </center>
+	
+	
+	<table style="width:100%">
+	  <tr>
+		<td> <center>  <a href="intersectionsMap.html"> <H3>  Configuration Manager  </H3> </a> </center>  </td>
+		<td> <center> <a   href="performance.html"> <H3>  Performance Observer </H3>  </a> </center>  </td>		
+	  </tr>
+	</table>
+	
+	<hr size="10" noshade>
+	
+	
+	
+<form id="myForm" name="gavilanFormName" action="sendFile.php" method="post" >
+	  <H2>
+		&nbsp  &nbsp &nbsp    &nbsp	  Gavilan Peak - Daisy Mountain Dr. Intersection Configuration:  </H2> 
+	
+			 <H3>
+				<span class="tab"></span> 
+				  
+				Is it coordinated?
+				<input type="checkbox"  name="GavCoordCheckBox"
+					  id="GavilanCoord" value="GavilanCoord"  > 
+					  <br>
+				
+						<span class="tab"></span>
+					    &nbsp    &nbsp	Coordination Weight:
+						<input type="range" id="GavCoordW" min="0" max="100" value="0" step="5" name="GavilanCoordWeight" onchange="showValue(this.id,this.value)" />
+						<span id="rangeGavCoordW">0</span>
+						 <br>
+						<span class="tab"></span>
+						 &nbsp    &nbsp  Cycle: <input type='text'size='3' name='GavilanCycle'>
+						 <br>
+						<span class="tab"></span>
+						 &nbsp    &nbsp  Offset: <input type='text'size='3'  name='GavilanOffset'>
+						  <br>
+						<span class="tab"></span>
+						 &nbsp    &nbsp  Coordinated Phase: <input type='text'size='3'  name='GavilanCoordPhase'>
+						 <br>
+						<span class="tab"></span>
+						 &nbsp   &nbsp Coordinated Phase Split: <input type='text' size='3' name='GavilanSplit'>
+					
+				<br>
+				<br>
+					<span class="tab"></span>
+				Does EV Override?
+				<input type="checkbox"  name="GavEVCheckBox"
+					  id="GavilanEV" value="GavilanEV"  > 
+				 <br>	
+				<br>
+				<span class="tab"></span>
+				 Priority Weights:
+				 <br>
+				  <span class="tab"></span>
+					 &nbsp   &nbsp &nbsp   &nbsp Truck  &nbsp  &nbsp 0
+					 <input type="range"  id="GavTrkW" min="0" max="100" value="0" step="5" name="GavilanTruckWeight" onchange="showValue(this.id,this.value)" /> 
+					 <span id="rangeGavTrkW">100</span>  &nbsp    
+				<br> 
+				
+				  <span class="tab"></span>
+					 &nbsp   &nbsp &nbsp   &nbsp Transit   &nbsp 0
+					 <input type="range"  id="GavTrnW" min="0" max="100" value="0" step="5" name="GavilanTransitWeight" onchange="showValue(this.id,this.value)" /> 
+					 <span id="rangeGavTrnW">100</span>  &nbsp
+				 <br>
+				 
+				 <span class="tab"></span>
+					 &nbsp   &nbsp &nbsp   &nbsp Truck   &nbsp  &nbsp
+					 <span id="rangeGavTrkTrnW">50</span> 
+					 <input type="range"  id="GavTrkTrnW" min="0" max="100" value="50" step="5" name="GavilanTruckTransitWeight" onchange="showValue(this.id,this.value)" /> 
+					 <span id="rangeGavTrnTrkW">50</span> &nbsp    Transit
+					 <br>
+					 
+			 </H3>		 
+	
+	
+	
+	<br>
+	 &nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp &nbsp <input type="submit" name="gavilanConfig"  value=" Submit To RSE"  style="color: #000000;padding: 5px; font-family: Time New Roman;font-weight: bold; font-size: 18px;" > 	
+	 
+	</form>
+	
+	
+	  
+	
+	<script type="text/javascript">
+	function showValue(id,newValue)
+	{
+		switch(id)
+		{
+			case("GavCoordW"):
+			document.getElementById("rangeGavCoordW").innerHTML=newValue;
+			break;
+		case("GavTrkTrnW"):
+			{
+				document.getElementById("rangeGavTrkTrnW").innerHTML=newValue;
+				document.getElementById("rangeGavTrnTrkW").innerHTML=100-newValue;
+			}
+			break;
+		case("GavTrkW"):
+			{
+				document.getElementById("rangeGavTrkW").innerHTML=newValue;
+			}
+			break;
+		case("GavTrnW"):
+			{
+				document.getElementById("rangeGavTrnW").innerHTML=newValue;
+			}
+			break;
+		}
+	}
+	function submitform()
+	{
+		document.forms["myForm"].submit();
+	}
+	</script>
+
+	
+  </body>
+</html>
+
+
+
+

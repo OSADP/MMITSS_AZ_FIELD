@@ -1,0 +1,167 @@
+body{
+position:relative;
+background-color: #c8cfda;
+}
+
+#logo > img{
+width: 500px;
+height:150px;
+float:center;
+left:15%;
+top:50%;
+position:relative;
+}
+
+#cv > img{
+position:relative;
+float:left;
+height:150px;
+width:400px;
+left:5%;
+top:50%;
+}
+
+#overall{
+position:relative;
+float:center;
+width:100%;
+height:100%;
+}
+
+#chart_det{
+float: left;
+border: 4px solid gray;
+position:absolute;
+left:100px;
+top:40px;
+background-color: white;
+height: 300px;
+width: 400px;
+}
+
+#chart_mode{
+float:left;
+height: 300px;
+width: 500px;
+border: 4px solid gray;
+position:absolute;
+left:50px;
+top:400px;
+background-color: white;
+}
+
+#chart_geo{
+width:500px;
+height:300px;
+border: 4px solid gray;
+
+float:right;
+position:absolute;
+left:670px;
+top:400px;
+}
+
+#table_ind{
+width:500px;
+
+border: 4px solid gray;
+position:relative;
+float:left;
+text-align: center;
+}
+
+#chart_avg{
+float: right;
+height: 300px;
+width: 400px;
+background-color: white;
+border: 4px solid gray;
+position:absolute;
+left:1000px;
+top:40px;
+}
+
+#chart_distance{
+float: left;
+margin-right:10px;
+border: 4px solid gray;
+background-color: white;
+height: 300px;
+width: 400px;
+position:absolute;
+left:1000px;
+top:400px;
+}
+
+#top-left{
+position:relative;
+}
+
+
+#chart_radar{
+float: left;
+
+border: 4px solid gray;
+
+background-color: white;
+width:400px;
+height:300px;
+position:absolute;
+left:550px;
+top:40px;
+}
+
+#chart_radarDelay{
+float: left;
+
+border: 4px solid gray;
+
+background-color: white;
+width:400px;
+height:300px;
+position:absolute;
+left:550px;
+top:400px;
+}
+
+#chart_stops{
+float: left;
+margin-right:10px;
+border: 4px solid gray;
+background-color: white;
+height: 300px;
+width: 400px;
+position:absolute;
+left:100px;
+top:400px;
+}
+
+#chart_distance > fieldset{
+height: 280px;
+width: 300px;
+}
+
+#chart_stops > fieldset{
+height: 280px;
+width: 300px;
+}
+
+#chart_det > fieldset{
+height: 280px;
+width: 300px;
+}
+
+#chart_avg > fieldset{
+height: 280px;
+
+}
+
+#chart_radar > fieldset{
+height: 280px;
+width: 300px;
+}
+
+#chart_radarDelay > fieldset{
+height: 280px;
+width: 300px;
+}

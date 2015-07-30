@@ -1,0 +1,46 @@
+#overall{
+position:relative;
+
+}
+
+#logo > img{
+width: 500px;
+height:150px;
+float:center;
+left:200px;
+top:50%;
+position:relative;
+}
+
+#cv > img{
+position:relative;
+float:left;
+height:150px;
+width:400px;
+left:100px;;
+top:50%;
+}
+
+#Infrstructure{
+width:500px;
+position:relative;
+float:left;
+padding-left:120px;
+
+}
+
+#CV{
+width:500px;
+position:relative;
+float:right;
+padding-right:120px;
+}
+
+.submission{
+position:relative;
+float:center;
+
+text-align:center;
+
+
+}
