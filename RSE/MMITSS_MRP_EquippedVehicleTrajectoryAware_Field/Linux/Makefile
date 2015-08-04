@@ -1,7 +1,7 @@
 SRC =   
 SRC += MMITSS_rsu_BSM_Receiver.cpp GeoCoord.cpp NMAP.cpp AccelerationSet4Way.cpp BasicVehicle.cpp Brakes.cpp PositionLocal3D.cpp Motion.cpp
 
-TGT:=MMITSS_rsu_BSM_Receiver
+TGT:=MMITSS_MRP_EquippedVehicleTrajectoryAware
 TOOLCHAIN=../../../sdk/rse/toolchain
 
 SAVARI_CC=$(TOOLCHAIN)/bin/i386-linux-uclibc-g++

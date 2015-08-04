@@ -22,7 +22,7 @@
 //Modified by Yiheng Feng 2013.9.23
 //Function: ecef2local added!
 
-  */
+
 #include <cmath>
 class geoCoord {
 private:
