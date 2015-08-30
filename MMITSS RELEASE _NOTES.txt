@@ -1,0 +1,13 @@
+Multi Modal Intelligent Traffic Signal System (MMITSS) version 1.0 August 31, 2015
+
+- System Requirements (third-party platforms / modules / etc with version numbers / dates)
+The MMITSS software has been implemented and tested using Savari StreetWAVE(TM)  RSU and MobileWAVE(TM) OBU hardware as well as an Android smartphone, and a windows computer (central system webserver applications). All applications have been developed and tested using standard C and C++ with only minor dependancies on the deployment hardware.
+
+The Savari SDK is required for building the applications to run on the RSU and OBU which are running version 3.1.2.1 firmware. Users should contact Savari for information about acquiring the SDK.
+
+
+A Users Guide is provided in the docs folder of the distribution
+
+Detailed Design Documentation is available throught he Connected Vehicle Pooled Fund Study website:
+    http://www.cts.virginia.edu/cvpfs_research/
+
