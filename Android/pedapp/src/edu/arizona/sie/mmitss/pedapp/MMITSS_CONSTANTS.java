@@ -1,5 +1,12 @@
 package edu.arizona.sie.mmitss.pedapp;
 
+//**********************************************************************************
+//
+// © 2015 Arizona Board of Regents on behalf of the University of Arizona with rights
+//       granted for USDOT OSADP distribution with the Apache 2.0 open source license.
+//
+//**********************************************************************************
+
 public class MMITSS_CONSTANTS {
 	public static final double HEADING_TOLERANCE = 20; //degrees
 	public static final double FENCE_DISTANCE = 10.0; //metres

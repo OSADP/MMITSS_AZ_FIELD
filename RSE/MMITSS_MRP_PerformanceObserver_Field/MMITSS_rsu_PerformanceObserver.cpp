@@ -1,3 +1,11 @@
+
+//**********************************************************************************
+//
+// © 2015 Arizona Board of Regents on behalf of the University of Arizona with rights
+//       granted for USDOT OSADP distribution with the Apache 2.0 open source license.
+//
+//**********************************************************************************
+
 /**************************************************************************************************************************/
 /*   Multi Modal Intelligent Traffic Signal System (MMITSS) [Phase 2]                                                              */
 /*   Pooled Fund Project                                                                                                                                     */

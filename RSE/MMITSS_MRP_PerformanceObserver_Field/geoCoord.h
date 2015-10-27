@@ -1,3 +1,11 @@
+//**********************************************************************************
+//
+// © 2015 Arizona Board of Regents on behalf of the University of Arizona with rights
+//       granted for USDOT OSADP distribution with the Apache 2.0 open source license.
+//
+//**********************************************************************************
+
+
 /*geoCoord is a utility class to translate between WGS84 and ECEF
   Reference:
 

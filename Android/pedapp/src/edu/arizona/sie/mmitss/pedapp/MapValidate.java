@@ -1,5 +1,12 @@
 package edu.arizona.sie.mmitss.pedapp;
 
+//**********************************************************************************
+//
+// © 2015 Arizona Board of Regents on behalf of the University of Arizona with rights
+//       granted for USDOT OSADP distribution with the Apache 2.0 open source license.
+//
+//**********************************************************************************
+
 import java.util.ArrayList;
 import java.util.Arrays;
 
