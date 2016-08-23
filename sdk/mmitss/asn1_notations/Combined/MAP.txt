@@ -1,0 +1,317 @@
+J2735-MAP-MESSAGE DEFINITIONS AUTOMATIC TAGS::=
+BEGIN
+IMPORTS
+	Count,
+	DescriptiveName,
+	DHour,
+	DMinute,
+	DSecond,
+	DSRCmsgID,
+	Elevation,
+	Heading,
+	IntersectionID,
+	IntersectionStatusObject,
+	LaneNumber,
+	Latitude,
+	Longitude,
+	MsgCount,
+	NTCIPVehicleclass,
+	TemporaryID,
+	VehicleIdent,
+	VehicleType,
+	VINstring
+FROM J2735-MESSAGE-COMMON;
+
+MAP ::= SEQUENCE {
+msgID DSRCmsgID,
+msgCnt MsgCount,
+name DescriptiveName OPTIONAL,
+layerType LayerType OPTIONAL,
+layerID LayerID OPTIONAL,
+intersections SEQUENCE (SIZE(1..32)) OF Intersection,
+-- other objects may be added at this layer, tbd,
+-- this might become a nested CHOICE statement
+-- roadSegments SEQUENCE (SIZE(1..32)) OF
+-- RoadSegments OPTIONAL,
+-- curveSegments SEQUENCE (SIZE(1..32)) OF
+-- curveSegments OPTIONAL,
+-- wanted: some type of data frame describing how
+-- the data was determined/processed to go here
+dataParameters DataParameters OPTIONAL,
+crc MsgCRC
+}
+
+LayerType ::= ENUMERATED {
+none (0),
+mixedContent (1), -- two or more of the below types
+generalMapData (2),
+intersectionData (3),
+curveData (4),
+roadwaySectionData (5),
+parkingAreaData (6),
+sharedLaneData (7)
+}
+
+LayerID ::= INTEGER (0..100)
+
+Intersection ::= SEQUENCE {
+name DescriptiveName OPTIONAL,
+id IntersectionID,
+-- a gloablly unique value,
+-- the upper bytes of which may not
+-- be sent if the context is known
+refPoint Position3D OPTIONAL,
+-- the reference from which subsequent
+-- data points are offset until a new
+-- point is used.
+refInterNum IntersectionID OPTIONAL,
+-- present only if this is a computed
+-- intersection instance
+orientation Heading OPTIONAL,
+-- present only if this is a computed
+-- intersection instance
+laneWidth LaneWidth OPTIONAL,
+-- reference width used by subsequent
+-- lanes until a new width is given
+type IntersectionStatusObject OPTIONAL,
+-- data about the intersection type
+approaches SEQUENCE (SIZE(1..32)) OF ApproachObject
+-- data about one or more approaches
+-- (lane data is found here)
+}
+
+Position3D ::= SEQUENCE {
+lat Latitude, -- in 1/10th micro degrees
+long Longitude, -- in 1/10th micro degrees
+elevation Elevation OPTIONAL
+}
+
+LaneWidth ::= INTEGER (0..32767) -- units of 1 cm
+
+ApproachObject ::= SEQUENCE {
+refPoint Position3D OPTIONAL,
+-- optional reference from which subsequent
+-- data points in this link are offset
+laneWidth LaneWidth OPTIONAL,
+-- reference width used by subsequent
+-- lanes until a new width is given
+approach Approach OPTIONAL,
+-- list of Approaches and their lanes
+egress Approach OPTIONAL
+-- list of Egresses and thier lanes
+}
+
+Approach ::= SEQUENCE {
+name DescriptiveName OPTIONAL,
+id ApproachNumber OPTIONAL,
+drivingLanes SEQUENCE (SIZE(0..32)) OF VehicleReferenceLane,
+computedLanes SEQUENCE (SIZE(0..32)) OF VehicleComputedLane,
+trainsAndBuses SEQUENCE (SIZE(0..32)) OF SpecialLane,
+barriers SEQUENCE (SIZE(0..32)) OF BarrierLane,
+crosswalks SEQUENCE (SIZE(0..32)) OF CrosswalkLane
+}
+
+ApproachNumber ::= INTEGER (0..127)
+
+VehicleReferenceLane ::= SEQUENCE {
+laneNumber LaneNumber,
+laneWidth LaneWidth OPTIONAL,
+laneAttributes VehicleLaneAttributes,
+nodeList NodeList,
+-- path details of the lane and width
+keepOutList NodeList OPTIONAL,
+-- no stop points along the path
+connectsTo ConnectsTo OPTIONAL
+-- a list of other lanes and their
+-- turning use by this lane
+}
+
+VehicleLaneAttributes ::= INTEGER (0..65535)
+-- With bits as defined:
+--noLaneData VehicleLaneAttributes ::= 0
+-- ('0000000000000000'B)
+--egressPath VehicleLaneAttributes ::= 1
+-- ('0000000000000001'B)
+-- a two-way path or an outbound
+-- path is described
+--maneuverStraightAllowed VehicleLaneAttributes ::= 2
+-- ('0000000000000010'B)
+--maneuverLeftAllowed VehicleLaneAttributes ::= 4
+-- ('0000000000000100'B)
+--maneuverRightAllowed VehicleLaneAttributes ::= 8
+-- ('0000000000001000'B)
+--yield VehicleLaneAttributes ::= 16
+-- ('0000000000010000'B)
+--maneuverNoUTurn VehicleLaneAttributes ::= 32
+-- ('0000000000100000'B)
+--maneuverNoTurnOnRed VehicleLaneAttributes ::= 64
+-- ('0000000001000000'B)
+--maneuverNoStop VehicleLaneAttributes ::= 128
+-- ('0000000010000000'B)
+--noStop VehicleLaneAttributes ::= 256
+-- ('0000000100000000'B)
+--noTurnOnRed VehicleLaneAttributes ::= 512
+-- ('0000001000000000'B)
+--hovLane VehicleLaneAttributes ::= 1024
+-- ('0000010000000000'B)
+--busOnly VehicleLaneAttributes ::= 2048
+-- ('0000100000000000'B)
+--busAndTaxiOnly VehicleLaneAttributes ::= 4096
+-- ('0001000000000000'B)
+--maneuverHOVLane VehicleLaneAttributes ::= 8192
+-- ('0010000000000000'B)
+--maneuverSharedLane VehicleLaneAttributes ::= 16384
+-- ('0100000000000000'B)
+-- a "TWLTL" (two way left turn lane)
+--maneuverBikeLane VehicleLaneAttributes ::= 32768
+-- ('1000000000000000'B)
+
+NodeList ::= SEQUENCE (SIZE(1..64)) OF Offsets
+-- the Position3D ref point (starting point or anchor)
+-- is found in the outer object.
+-- Offsets are additive from the last point.
+
+Offsets ::= OCTET STRING (SIZE(4..8))
+-- Made up of
+-- SEQUENCE {
+-- xOffset INTEGER (-32767..32767),
+-- yOffset INTEGER (-32767..32767),
+-- if 6 or 8 bytes in length:
+-- zOffset INTEGER (-32767..32767) OPTIONAL,
+-- all above in signed values where
+-- the LSB is in units of 1.0 cm
+-- if 8 bytes in length:
+-- width LaneWidth OPTIONAL
+-- a length of 7 bytes is never used
+-- }
+
+ConnectsTo ::= OCTET STRING (SIZE(2..32))
+-- sets of 2 byte pairs,
+-- the first byte is a lane number
+-- the second byte is a LaneManeuverCode
+
+
+VehicleComputedLane ::= SEQUENCE {
+laneNumber LaneNumber,
+laneWidth LaneWidth OPTIONAL,
+laneAttributes VehicleLaneAttributes OPTIONAL,
+-- if not present, same as ref lane
+refLaneNum LaneNumber,
+-- number of the ref lane to be used
+lineOffset DrivenLineOffset,
+keepOutList NodeList OPTIONAL,
+-- no stop points along the path
+connectsTo ConnectsTo OPTIONAL
+-- a list of other lanes and their
+-- turning use by this lane
+}
+
+DrivenLineOffset ::= INTEGER (-32767..32767)
+-- LSB units are 1 cm.
+
+SpecialLane ::= SEQUENCE {
+laneNumber LaneNumber,
+laneWidth LaneWidth OPTIONAL,
+laneAttributes SpecialLaneAttributes,
+nodeList NodeList,
+-- path details of the lane and width
+keepOutList NodeList OPTIONAL,
+-- no stop points along the path
+connectsTo ConnectsTo OPTIONAL
+-- a list of other lanes and their
+-- turning use by this lane
+}
+
+SpecialLaneAttributes ::= ENUMERATED {
+noData (0), -- ('0000000000000000'B)
+egressPath (1), -- ('0000000000000001'B)
+-- a two-way path or an outbound path is described
+railRoadTrack (2), -- ('0000000000000010'B)
+transitOnlyLane (4), -- ('0000000000000100'B)
+hovLane (8), -- ('0000000000001000'B)
+busOnly (16), -- ('0000000000010000'B)
+vehiclesEntering (32), -- ('0000000000100000'B)
+vehiclesLeaving (64), -- ('0000000001000000'B)
+reserved (128) -- ('0000000010000000'B)
+} -- 1 byte
+
+
+BarrierLane ::= SEQUENCE {
+laneNumber LaneNumber,
+laneWidth LaneWidth OPTIONAL,
+barrierAttributes BarrierAttributes,
+nodeList NodeList
+-- path details of the Barrier
+}
+
+BarrierAttributes ::= INTEGER (0..8192)
+-- With bits as defined:
+--noData BarrierAttributes ::= 0
+-- ('0000-0000-0000-0000'B)
+--median BarrierAttributes ::= 1
+-- ('0000-0000-0000-0001'B)
+--whiteLine BarrierAttributes ::= 2
+-- ('0000-0000-0000-0010'B)
+--strippedLines BarrierAttributes ::= 4
+-- ('0000-0000-0000-0100'B)
+--doubleStrippedLines BarrierAttributes ::= 8
+-- ('0000-0000-0000-1000'B)
+--trafficCones BarrierAttributes ::= 16
+-- ('0000-0000-0001-0000'B)
+--constructionBarrier BarrierAttributes ::= 32
+-- ('0000-0000-0010-0000'B)
+--trafficChannels BarrierAttributes ::= 64
+-- ('0000-0000-0100-0000'B)
+--noCurbs BarrierAttributes ::= 128
+-- ('0000-0000-1000-0000'B)
+--lowCurbs BarrierAttributes ::= 256
+-- ('0000-0000-1000-0000'B)
+--highCurbs BarrierAttributes ::= 512
+-- ('0000-0001-0000-0000'B)
+--hovDoNotCross BarrierAttributes ::= 1024
+-- ('0000-0010-0000-0000'B)
+--hovEntryAllowed BarrierAttributes ::= 2048
+-- ('0000-0100-0000-0000'B)
+--hovExitAllowed BarrierAttributes ::= 4096
+-- ('0000-1000-0000-0000'B)
+
+CrosswalkLane ::= SEQUENCE {
+laneNumber LaneNumber,
+laneWidth LaneWidth OPTIONAL,
+laneAttributes CrosswalkLaneAttributes,
+nodeList NodeList,
+-- path details of the lane
+-- note that this may cross or pass
+-- by driven lanes
+keepOutList NodeList OPTIONAL,
+-- no stop points along the path
+-- typically the end points unless
+-- islands are represented in the path
+connectsTo ConnectsTo OPTIONAL
+-- a list of other lanes and their
+-- turning use by this lane
+}
+
+CrosswalkLaneAttributes ::= ENUMERATED {
+noData (0), -- ('0000000000000000'B)
+twoWayPath (1), -- ('0000000000000001'B)
+pedestrianCrosswalk (2), -- ('0000000000000010'B)
+bikeLane (4), -- ('0000000000000100'B)
+railRoadTrackPresent (8), -- ('0000000000001000'B)
+oneWayPathOfTravel (16), -- ('0000000000010000'B)
+pedestrianCrosswalkTypeA (32), -- ('0000000000100000'B)
+pedestrianCrosswalkTypeB (64), -- ('0000000001000000'B)
+pedestrianCrosswalkTypeC (128) -- ('0000000010000000'B)
+}
+-- MUTCD provides no real "types" to use here
+
+DataParameters ::= SEQUENCE {
+processMethod IA5String(SIZE(1..255)) OPTIONAL,
+processAgency IA5String(SIZE(1..255)) OPTIONAL,
+lastCheckedDate IA5String(SIZE(1..255)) OPTIONAL,
+geiodUsed IA5String(SIZE(1..255)) OPTIONAL
+}
+
+MsgCRC ::= OCTET STRING (SIZE(2)) -- created with the CRC-CCITT polynomial
+
+END

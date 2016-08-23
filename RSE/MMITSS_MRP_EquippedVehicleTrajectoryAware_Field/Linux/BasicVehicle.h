@@ -1,9 +1,11 @@
-//**********************************************************************************
-//
-// © 2015 Arizona Board of Regents on behalf of the University of Arizona with rights
-//       granted for USDOT OSADP distribution with the Apache 2.0 open source license.
-//
-//**********************************************************************************
+
+/*NOTICE:  Copyright 2014 Arizona Board of Regents on behalf of University of Arizona.
+ * All information, intellectual, and technical concepts contained herein is and shall
+ * remain the proprietary information of Arizona Board of Regents and may be covered
+ * by U.S. and Foreign Patents, and patents in process.  Dissemination of this information
+ * or reproduction of this material is strictly forbidden unless prior written permission
+ * is obtained from Arizona Board of Regents or University of Arizona.
+ */
 
 /*  BasicVehicle.h  
 *  Created by Mehdi Zamanipour on 7/9/14.
@@ -119,13 +121,13 @@ public:
     // inported buffer . this functuion would be called before creating BSM
     void CreateEmptyBSMblob(char* theTarget);
     void FillupBlob( int offset,char * blob, char * p, int size);
-	long UnpackBlob(int offset,char * blob,int size);
+    long UnpackBlob(int offset,char * blob,int size);
 	BasicVehicle(void);
 	~BasicVehicle(void);
 	
 
-	void VehicleToBSM(char* bytes2Send) ;   //this function creates a BSM blob payload from a vehicle
-	void BSMToVehicle(char* bytesReceived) ; // This function unpack the BSM blob stream and populates the vehicle attributes (the class data)
+	 void VehicleToBSM(char* bytes2Send) ;   //this function creates a BSM blob payload from a vehicle
+	 void BSMToVehicle(char* bytesReceived) ; // This function unpack the BSM blob stream and populates the vehicle attributes (the class data)
 
 };
 

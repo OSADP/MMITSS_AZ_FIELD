@@ -1,12 +1,13 @@
-//**********************************************************************************
-//
-// © 2015 Arizona Board of Regents on behalf of the University of Arizona with rights
-//       granted for USDOT OSADP distribution with the Apache 2.0 open source license.
-//
-//**********************************************************************************
+/*NOTICE:  Copyright 2014 Arizona Board of Regents on behalf of University of Arizona.
+ * All information, intellectual, and technical concepts contained herein is and shall
+ * remain the proprietary information of Arizona Board of Regents and may be covered
+ * by U.S. and Foreign Patents, and patents in process.  Dissemination of this information
+ * or reproduction of this material is strictly forbidden unless prior written permission
+ * is obtained from Arizona Board of Regents or University of Arizona.
+ */   
 
 /*  GetInfo.h 
-*  Created by Jun Ding
+*  Created by Mehdi Zamanipour
 *  University of Arizona   
 *  ATLAS Research Center 
 *  College of Engineering
@@ -45,7 +46,8 @@ extern int CombinedPhase[8];
 extern char IPInfo[64]			   ;
 extern char rsuid_filename[64] ;
 extern string RSUID;
-extern char INTip[64];// = "150.135.152.23";
+extern char INTip[128];// = "150.135.152.23";
+
 extern char INTport[16];
 extern char tmp_log[256];
 extern int outputlog(char *output);

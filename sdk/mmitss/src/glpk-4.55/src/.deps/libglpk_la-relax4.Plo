@@ -1,0 +1,10 @@
+libglpk_la-relax4.lo: misc/relax4.c \
+ /home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/stdc-predef.h \
+ /home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/bits/predefs.h \
+ misc/relax4.h
+
+/home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/stdc-predef.h:
+
+/home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/bits/predefs.h:
+
+misc/relax4.h:

@@ -1,0 +1,63 @@
+J2735-PSM-MESSAGE DEFINITIONS AUTOMATIC TAGS::=
+BEGIN
+IMPORTS
+	Count,
+	DescriptiveName,
+	DHour,
+	DMinute,
+	DSecond,
+	DSRCmsgID,
+	Elevation,
+	Heading,
+	IntersectionID,
+	IntersectionStatusObject,
+	LaneNumber,
+	Latitude,
+	Longitude,
+	MsgCount,
+	NTCIPVehicleclass,
+	TemporaryID,
+	VehicleIdent,
+	VehicleType,
+	VINstring
+FROM J2735-MESSAGE-COMMON;
+
+PSM ::= SEQUENCE {
+   msgID              DSRCmsgID,      
+   id                 IntersectionID,  
+   numberOfRequests   NumberOfRequests,  
+   activeRequestTable SEQUENCE(SIZE(1..10)) OF ActiveRequestTable
+}
+
+NumberOfRequests ::= INTEGER (1..10)
+ActiveRequestTable ::=SEQUENCE {
+    priorityReqEntryNum		         RequestEntry,	
+    priorityReqID          	         VehicleID, 
+    priorityActive                       ActivePriority,  
+    type                       	         NTCIPVehicleclass,   
+    inLane                               LaneNumber,   -- approach Lane  
+    outLane                    	         LaneNumber,   -- egress Lane 
+    priorityReqTimeOfSrvDesd   		 DSecond,  -- second since midnight    
+    priorityReqTimeOfEstdDepart		 DSecond,
+    requestState              	         VehicleState,  
+    requestSeqNumber                     SequenceNumber, 
+    priorityReqTimeOfMsg             	 DSecond,
+    priorityReqTimeToLive                DSecond
+}
+
+RequestEntry ::= INTEGER(0..10)
+VehicleID ::= OCTET STRING (SIZE(4)) 
+ActivePriority ::= BOOLEAN     
+
+VehicleState ::= ENUMERATED{
+	approaching	   (1),
+	leaving		   (2),
+	inQueue		   (3),	
+	inIntersection     (4),
+	outOfMap           (5),
+	dwelling           (6),
+	isCanceled         (7)
+}
+SequenceNumber ::= INTEGER(0..126) 
+
+END

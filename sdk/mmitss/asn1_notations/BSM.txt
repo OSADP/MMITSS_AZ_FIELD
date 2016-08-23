@@ -1,0 +1,27 @@
+J2735BSMMESSAGE DEFINITIONS AUTOMATIC TAGS::=
+BEGIN
+
+ BSM ::= SEQUENCE {
+    msgID ENUMERATED {
+		reserved (0),
+		alaCarteMessage (1), 
+                 basicSafetyMessage (2),
+		basicSafetyMessageVerbose (3),
+		commonSafetyRequest (4),
+		emergencyVehicleAlert (5),
+		intersectionCollisionAlert (6),
+		mapData (7),
+		nmeaCorrections (8),
+		probeDataManagement (9),
+		probeVehicleData (10),
+		roadSideAlert (11),
+		rtcmCorrections(12),
+                signalPhaseAndTimingMessage (13),
+		signalRequestMessage (14), 
+		signalStatusMessage (15), 
+		travelerInformation (16)	
+	 }, 
+    bsmBlob OCTET STRING(SIZE(38))
+}
+
+END

@@ -1,0 +1,10 @@
+libglpk_la-strspx.lo: misc/strspx.c \
+ /home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/stdc-predef.h \
+ /home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/bits/predefs.h \
+ misc/misc.h
+
+/home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/stdc-predef.h:
+
+/home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/bits/predefs.h:
+
+misc/misc.h:

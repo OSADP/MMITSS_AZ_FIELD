@@ -1,0 +1,16 @@
+glpsol.o: glpsol.c \
+ /home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/stdc-predef.h \
+ /home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/bits/predefs.h \
+ ../src/glpk.h \
+ /home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/lib/gcc/arm-none-linux-gnueabi/4.8.3/include/stdarg.h \
+ /home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/lib/gcc/arm-none-linux-gnueabi/4.8.3/include/stddef.h
+
+/home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/stdc-predef.h:
+
+/home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/bits/predefs.h:
+
+../src/glpk.h:
+
+/home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/lib/gcc/arm-none-linux-gnueabi/4.8.3/include/stdarg.h:
+
+/home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/lib/gcc/arm-none-linux-gnueabi/4.8.3/include/stddef.h:

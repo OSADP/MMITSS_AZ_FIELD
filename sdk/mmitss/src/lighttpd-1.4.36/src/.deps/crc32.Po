@@ -1,0 +1,81 @@
+crc32.o: crc32.c \
+ /home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/stdc-predef.h \
+ /home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/bits/predefs.h \
+ crc32.h ../config.h \
+ /home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/sys/types.h \
+ /home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/features.h \
+ /home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/sys/cdefs.h \
+ /home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/bits/wordsize.h \
+ /home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/gnu/stubs.h \
+ /home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/gnu/stubs-soft.h \
+ /home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/bits/types.h \
+ /home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/bits/typesizes.h \
+ /home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/time.h \
+ /home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/lib/gcc/arm-none-linux-gnueabi/4.8.3/include/stddef.h \
+ /home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/endian.h \
+ /home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/bits/endian.h \
+ /home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/bits/byteswap.h \
+ /home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/bits/byteswap-16.h \
+ /home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/sys/select.h \
+ /home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/bits/select.h \
+ /home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/bits/sigset.h \
+ /home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/bits/time.h \
+ /home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/sys/sysmacros.h \
+ /home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/bits/pthreadtypes.h \
+ /home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/lib/gcc/arm-none-linux-gnueabi/4.8.3/include/stdint.h \
+ /home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/stdint.h \
+ /home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/bits/wchar.h
+
+/home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/stdc-predef.h:
+
+/home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/bits/predefs.h:
+
+crc32.h:
+
+../config.h:
+
+/home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/sys/types.h:
+
+/home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/features.h:
+
+/home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/sys/cdefs.h:
+
+/home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/bits/wordsize.h:
+
+/home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/gnu/stubs.h:
+
+/home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/gnu/stubs-soft.h:
+
+/home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/bits/types.h:
+
+/home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/bits/typesizes.h:
+
+/home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/time.h:
+
+/home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/lib/gcc/arm-none-linux-gnueabi/4.8.3/include/stddef.h:
+
+/home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/endian.h:
+
+/home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/bits/endian.h:
+
+/home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/bits/byteswap.h:
+
+/home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/bits/byteswap-16.h:
+
+/home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/sys/select.h:
+
+/home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/bits/select.h:
+
+/home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/bits/sigset.h:
+
+/home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/bits/time.h:
+
+/home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/sys/sysmacros.h:
+
+/home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/bits/pthreadtypes.h:
+
+/home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/lib/gcc/arm-none-linux-gnueabi/4.8.3/include/stdint.h:
+
+/home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/stdint.h:
+
+/home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/bits/wchar.h:

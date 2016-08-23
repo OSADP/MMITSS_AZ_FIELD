@@ -18,12 +18,13 @@
 
 
 
-//**********************************************************************************
-//
-// © 2015 Arizona Board of Regents on behalf of the University of Arizona with rights
-//       granted for USDOT OSADP distribution with the Apache 2.0 open source license.
-//
-//**********************************************************************************
+/*NOTICE:  Copyright 2014 Arizona Board of Regents on behalf of University of Arizona.
+ * All information, intellectual, and technical concepts contained herein is and shall
+ * remain the proprietary information of Arizona Board of Regents and may be covered
+ * by U.S. and Foreign Patents, and patents in process.  Dissemination of this information
+ * or reproduction of this material is strictly forbidden unless prior written permission
+ * is obtained from Arizona Board of Regents or University of Arizona.
+ */   
 
 /*  cgpxlogger.cpp 
 *  Modified by Mehdi Zamanipour for OBU webpage display.
@@ -62,7 +63,7 @@
 #include "LinkedList.h"
 //#include "gpsd_config.h"
 //#include "gpsd.h"
-#include "libgps.h"
+//#include "libgps.h"
 //#include "OutputLog.h"
 
 using namespace std;
@@ -71,6 +72,7 @@ using namespace std;
 #define EV  1
 #define TRANSIT 2
 #define TRUCK 3
+#define REACT 5
 
 #define ACTIVE 1
 #define NOT_ACTIVE -1
@@ -132,15 +134,15 @@ void signal_status();
 void request_table();
 void priority_status();
 int FindListHighestPriority(LinkedList<ReqEntry> Req_List);
-struct gps_data_t *gpsdata;
-void process(struct gps_data_t *, char *, size_t, int);
-void html_write_record(struct gps_data_t *gpsdata);
+
+//void process(struct gps_data_t *, char *, size_t, int);
+//void html_write_record(struct gps_data_t *gpsdata);
 void html_track_start(void);
 void html_track_end(void);
-void write_record(struct gps_data_t *gpsdata);
+
 void track_start(void);
 void track_end(void);
-void gps_update();
+
 int  FindCombinedPhase(int phase);
 void FindCombinedReq(LinkedList<ReqEntry> &ReqList, ReqEntry &TestEntry);
 void FindCombinedReqList(LinkedList<ReqEntry> &ReqList, LinkedList<ReqEntry> &ReqList_Com);
@@ -626,6 +628,13 @@ void request_table()
 						printf("<td bgcolor=\"#FFFFFF\" align=\"center\"><font color=\"#330033\">TRUCK</td>");
 						
 					}
+					if(VehClass==REACT && R.iIsCanceled!=7)
+					{
+						printf("<td bgcolor=\"#FFFFFF\" align=\"center\"><img src=\"./pics/green.png\"  width=\"22\" height=\"22\" ></td>");
+						printf("<td bgcolor=\"#FFFFFF\" align=\"center\"><font color=\"#000000\"> %s </td>",R.VehID);
+						printf("<td bgcolor=\"#FFFFFF\" align=\"center\"><font color=\"#330033\">REACT</td>");
+						
+					}
 					if(VehClass==TRANSIT && R.iIsCanceled==7)
 					{
 						printf("<td bgcolor=\"#FFFFFF\" align=\"center\"><img src=\"./pics/red.png\"  width=\"22\" height=\"22\" ></td>");
@@ -639,21 +648,56 @@ void request_table()
 						printf("<td bgcolor=\"#FFFFFF\" align=\"center\"><font color=\"#330033\">TRUCK</td>");
 						
 					}
+					if(VehClass==REACT && R.iIsCanceled==7)
+					{
+						printf("<td bgcolor=\"#FFFFFF\" align=\"center\"><img src=\"./pics/red.png\"  width=\"22\" height=\"22\" ></td>");
+						printf("<td bgcolor=\"#FFFFFF\" align=\"center\"><font color=\"#000000\"> %s </td>",R.VehID);
+						printf("<td bgcolor=\"#FFFFFF\" align=\"center\"><font color=\"#330033\">REACT</td>");
+						
+					}
                 }
                 else if(HighestP==TRUCK)  // NO EV case, ONLY have request of TRANSIT and TRUCK
                 {      
-					if ( R.iIsCanceled !=7)       
+					if ( VehClass==TRUCK && R.iIsCanceled !=7)       
 					{
 						printf("<td bgcolor=\"#FFFFFF\" align=\"center\"><img src=\"./pics/green.png\"  width=\"22\" height=\"22\" ></td>");
 						printf("<td bgcolor=\"#FFFFFF\" align=\"center\"><font color=\"#000000\"> %s </td>",R.VehID);
 						printf("<td bgcolor=\"#FFFFFF\" align=\"center\"><font color=\"#330033\">TRUCK</td>");
-					}else
+					}
+					if ( VehClass==REACT && R.iIsCanceled !=7)       
+					{
+						printf("<td bgcolor=\"#FFFFFF\" align=\"center\"><img src=\"./pics/green.png\"  width=\"22\" height=\"22\" ></td>");
+						printf("<td bgcolor=\"#FFFFFF\" align=\"center\"><font color=\"#000000\"> %s </td>",R.VehID);
+						printf("<td bgcolor=\"#FFFFFF\" align=\"center\"><font color=\"#330033\">REACT</td>");
+					}
+					if ( VehClass==TRUCK && R.iIsCanceled ==7)    
 					{
 						printf("<td bgcolor=\"#FFFFFF\" align=\"center\"><img src=\"./pics/red.png\"  width=\"22\" height=\"22\" ></td>");
 						printf("<td bgcolor=\"#FFFFFF\" align=\"center\"><font color=\"#000000\"> %s </td>",R.VehID);
 						printf("<td bgcolor=\"#FFFFFF\" align=\"center\"><font color=\"#330033\">TRUCK</td>");
 					}
-				}                
+					if ( VehClass==REACT && R.iIsCanceled ==7)    
+					{
+						printf("<td bgcolor=\"#FFFFFF\" align=\"center\"><img src=\"./pics/red.png\"  width=\"22\" height=\"22\" ></td>");
+						printf("<td bgcolor=\"#FFFFFF\" align=\"center\"><font color=\"#000000\"> %s </td>",R.VehID);
+						printf("<td bgcolor=\"#FFFFFF\" align=\"center\"><font color=\"#330033\">REACT</td>");
+					}
+				} 
+				else if(HighestP==REACT)  // NO EV case, ONLY have request of REACT
+                {      
+					if ( R.iIsCanceled !=7)       
+					{
+						printf("<td bgcolor=\"#FFFFFF\" align=\"center\"><img src=\"./pics/green.png\"  width=\"22\" height=\"22\" ></td>");
+						printf("<td bgcolor=\"#FFFFFF\" align=\"center\"><font color=\"#000000\"> %s </td>",R.VehID);
+						printf("<td bgcolor=\"#FFFFFF\" align=\"center\"><font color=\"#330033\">REACT</td>");
+					}
+					else
+					{
+						printf("<td bgcolor=\"#FFFFFF\" align=\"center\"><img src=\"./pics/red.png\"  width=\"22\" height=\"22\" ></td>");
+						printf("<td bgcolor=\"#FFFFFF\" align=\"center\"><font color=\"#000000\"> %s </td>",R.VehID);
+						printf("<td bgcolor=\"#FFFFFF\" align=\"center\"><font color=\"#330033\">REACT</td>");
+					}
+				}        				
                 else                
                 {   // EV case, ONLY both requests of TRANSIT and EV
 
@@ -673,6 +717,12 @@ void request_table()
 					   printf("<td bgcolor=\"#FFFFFF\" align=\"center\"><img src=\"./pics/red.png\"  width=\"22\" height=\"22\"  ></td>");
                         printf("<td bgcolor=\"#FFFFFF\" align=\"center\"><font color=\"#000000\"> %s </td>",R.VehID);
                         printf("<td bgcolor=\"#FFFFFF\" align=\"center\"><font color=\"#330033\">TRUCK</td>");
+                    }
+					else if(VehClass==REACT)
+                    {
+					   printf("<td bgcolor=\"#FFFFFF\" align=\"center\"><img src=\"./pics/red.png\"  width=\"22\" height=\"22\"  ></td>");
+                        printf("<td bgcolor=\"#FFFFFF\" align=\"center\"><font color=\"#000000\"> %s </td>",R.VehID);
+                        printf("<td bgcolor=\"#FFFFFF\" align=\"center\"><font color=\"#330033\">REACT</td>");
                     }
                 }  
              

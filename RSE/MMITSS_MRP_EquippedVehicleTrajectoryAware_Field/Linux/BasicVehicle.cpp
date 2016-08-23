@@ -1,9 +1,10 @@
-//**********************************************************************************
-//
-// © 2015 Arizona Board of Regents on behalf of the University of Arizona with rights
-//       granted for USDOT OSADP distribution with the Apache 2.0 open source license.
-//
-//**********************************************************************************
+/*NOTICE:  Copyright 2014 Arizona Board of Regents on behalf of University of Arizona.
+ * All information, intellectual, and technical concepts contained herein is and shall
+ * remain the proprietary information of Arizona Board of Regents and may be covered
+ * by U.S. and Foreign Patents, and patents in process.  Dissemination of this information
+ * or reproduction of this material is strictly forbidden unless prior written permission
+ * is obtained from Arizona Board of Regents or University of Arizona.
+ */
 
 /*  BasicVehicle.cpp  
 *  Created by Mehdi Zamanipour on 7/9/14.
@@ -108,7 +109,7 @@ void BasicVehicle::BSMToVehicle(char* ablob)
 	    int offset;         // a counter into the blob bytes
         unsigned short   tempUShort; // temp values to hold data in final format
         long    lTemp;
-		unsigned byteA,byteB,byteC;
+		unsigned char byteA,byteB,byteC;
   
 		// the code is written to be compatibele with Intel platforms (which are all little endian)  
 		// while in Moto machines, or an ARM, or in ASN.1 the ordere is reversed (big endian)

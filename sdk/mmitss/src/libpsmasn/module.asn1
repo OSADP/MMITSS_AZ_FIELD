@@ -1,0 +1,77 @@
+MyModule DEFINITIONS AUTOMATIC TAGS::=
+BEGIN
+
+
+PSMmsg ::= SEQUENCE {
+   msgID              DSRCmsgID,      
+   id                 IntersectionID,  
+   numberOfRequests   NumberOfRequests,  
+   activeRequestTable SEQUENCE(SIZE(1..10)) OF ActiveRequestTable
+}
+
+DSRCmsgID ::= ENUMERATED {
+   reserved                        (0), 
+   alaCarteMessage                 (1),  -- ACM
+   basicSafetyMessage              (2),  -- BSM, heartbeat msg
+   basicSafetyMessageVerbose       (3),  -- used for testing only
+   commonSafetyRequest             (4),  -- CSR
+   emergencyVehicleAlert           (5),  -- EVA
+   intersectionCollisionAlert      (6),  -- ICA
+   mapData                         (7),  -- MAP, GID, intersections 
+   nmeaCorrections                 (8),  -- NMEA
+   probeDataManagement             (9),  -- PDM
+   probeVehicleData                (10), -- PVD
+   roadSideAlert                   (11), -- RSA
+   rtcmCorrections                 (12), -- RTCM
+   signalPhaseAndTimingMessage     (13), -- SPAT
+   signalRequestMessage            (14), -- SRM
+   signalStatusMessage             (15), -- SSM
+   travelerInformation             (16), -- TIM
+   prioritystatusmessage           (17)  -- PSM
+} 
+
+IntersectionID ::= OCTET STRING (SIZE(2..4))
+NumberOfRequests ::= INTEGER (1..10)
+ActiveRequestTable ::=SEQUENCE {
+    priorityReqEntryNum		         RequestEntry,	
+    priorityReqID          	         VehicleID, 
+    priorityActive                       ActivePriority,  
+    type                       	         NTCIPVehicleClass,   
+    inLane                               LaneNumber,   -- approach Lane  
+    outLane                    	         LaneNumber,   -- egress Lane 
+    priorityReqTimeOfSrvDesd   		 DTime,      
+    priorityReqTimeOfEstdDepart		 DSecond,
+    requestState              	         VehicleState,  
+    requestSeqNumber                     SequenceNumber, 
+    priorityReqTimeOfMsg             	 DTime,
+    priorityReqTimeToLive                DSecond
+}
+
+RequestEntry ::= INTEGER(0..10)
+VehicleID ::= OCTET STRING (SIZE(4)) 
+ActivePriority ::= BOOLEAN     
+NTCIPVehicleClass ::= OCTET STRING (SIZE(1))
+LaneNumber ::= OCTET STRING (SIZE(1))  
+
+DTime ::= SEQUENCE {
+hour DHour,     -- 1 byte
+minute DMinute, -- 1 byte
+second DSecond  -- 2 bytes
+}
+
+DHour ::= INTEGER (0..31) -- units of hours
+DMinute ::= INTEGER (0..63) -- units of minutes
+DSecond ::= INTEGER (0..100000000) -- units of miliseconds
+
+VehicleState ::= ENUMERATED{
+	approaching	   (1),
+	leaving		   (2),
+	inQueue		   (3),	
+	inIntersection     (4),
+	outOfMap           (5),
+	dwelling           (6),
+	isCanceled         (7)
+}
+SequenceNumber ::= INTEGER(0..126) 
+
+END

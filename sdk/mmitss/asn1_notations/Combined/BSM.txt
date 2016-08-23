@@ -1,0 +1,48 @@
+J2735-BSM-MESSAGE DEFINITIONS AUTOMATIC TAGS::=
+BEGIN
+IMPORTS
+	Count,
+	DescriptiveName,
+	DHour,
+	DMinute,
+	DSecond,
+	DSRCmsgID,
+	Elevation,
+	Heading,
+	IntersectionID,
+	IntersectionStatusObject,
+	LaneNumber,
+	Latitude,
+	Longitude,
+	MsgCount,
+	NTCIPVehicleclass,
+	TemporaryID,
+	VehicleIdent,
+	VehicleType,
+	VINstring
+FROM J2735-MESSAGE-COMMON;
+
+ BSM ::= SEQUENCE {
+    msgID ENUMERATED {
+		reserved (0),
+		alaCarteMessage (1), 
+                 basicSafetyMessage (2),
+		basicSafetyMessageVerbose (3),
+		commonSafetyRequest (4),
+		emergencyVehicleAlert (5),
+		intersectionCollisionAlert (6),
+		mapData (7),
+		nmeaCorrections (8),
+		probeDataManagement (9),
+		probeVehicleData (10),
+		roadSideAlert (11),
+		rtcmCorrections(12),
+                signalPhaseAndTimingMessage (13),
+		signalRequestMessage (14), 
+		signalStatusMessage (15), 
+		travelerInformation (16)	
+	 }, 
+    bsmBlob OCTET STRING(SIZE(38))
+}
+
+END

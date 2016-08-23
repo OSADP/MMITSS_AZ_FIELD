@@ -1,24 +1,3 @@
-/*NOTICE:  Copyright 2014 Arizona Board of Regents on behalf of University of Arizona.
- * All information, intellectual, and technical concepts contained herein is and shall
- * remain the proprietary information of Arizona Board of Regents and may be covered
- * by U.S. and Foreign Patents, and patents in process.  Dissemination of this information
- * or reproduction of this material is strictly forbidden unless prior written permission
- * is obtained from Arizona Board of Regents or University of Arizona.
- */   
-
-
-
-/* GetInfo.h
-*  Created by Jun Ding
-*  University of Arizona   
-*  ATLAS Research Center 
-*  College of Engineering
-*
-*  This code was develop under the supervision of Professor Larry Head
-*  in the ATLAS Research Center.
-
-*/
-
 #pragma once
 
 #include <iostream>
@@ -54,7 +33,7 @@ void get_ip_address();
 
 void get_ip_address()
 {
-	  char tmp_log[256];
+	char tmp_log[256];
     fstream fs;
     fs.open(IPInfo);
 

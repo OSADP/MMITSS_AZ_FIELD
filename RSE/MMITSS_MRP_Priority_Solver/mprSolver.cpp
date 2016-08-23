@@ -1,9 +1,10 @@
-//**********************************************************************************
-//
-// © 2015 Arizona Board of Regents on behalf of the University of Arizona with rights
-//       granted for USDOT OSADP distribution with the Apache 2.0 open source license.
-//
-//**********************************************************************************
+/*NOTICE:  Copyright 2014 Arizona Board of Regents on behalf of University of Arizona.
+ * All information, intellectual, and technical concepts contained herein is and shall
+ * remain the proprietary information of Arizona Board of Regents and may be covered
+ * by U.S. and Foreign Patents, and patents in process.  Dissemination of this information
+ * or reproduction of this material is strictly forbidden unless prior written permission
+ * is obtained from Arizona Board of Regents or University of Arizona.
+ */   
 
 /*  mprSolver.cpp  
 *  Created by Mehdi Zamanipour
@@ -51,6 +52,8 @@
 #include "LinkedList.h"
 #include "PriorityRequest.h"
 #include "ReqEntry.h"
+//#include "ConnectedVehicle.h"
+#include "EVLS.h"
 
 using namespace std;
 
@@ -78,6 +81,10 @@ using namespace std;
 #define PED 4
 #define COORDINATION 6
 #define MaxGrnTime 50         //ONLY change the phase {2,4,6,8} for EV requested phases
+// This code can be used only for pririty eligible vehicles OR can be integrated into COP OR can be used in extended formulation to consider regular vehicle as well as priority vehicles in the mathematical formulation
+#define COP_AND_PRIORITY 0  
+#define PRIORITY 1
+#define ADAPTIVE_PRIORITY 2
 
 
 //define log file name with time stamp.
@@ -94,7 +101,8 @@ char requestfilename[128] 			= "/nojournal/bin/requests.txt"; //requests
 char signal_filename[128]		 	= "/nojournal/bin/signal_status.txt";
 char prioritydatafile[128]			= "/nojournal/bin/NewModelData.dat";
 char resultsfile[128]    			= "/nojournal/bin/Results.txt"; // Result from the GLPK solver.
-
+char Lane_No_File_Name[64]  		= "/nojournal/bin/Lane_No_MPRSolver.txt"; 
+char Lane_Phase_File_Name[64]  		= "/nojournal/bin/Lane_Phase_Mapping.txt"; 
 
 // -------- BEGIN OF GLOABAL PARAMETERS-----//
 // wireless connection variables
@@ -102,16 +110,17 @@ int sockfd;
 int broadcast=1;
 struct sockaddr_in sendaddr;
 struct sockaddr_in recvaddr;
-void setupConnection(); //  setup socket connection to send the optimize schedule to traffic controller interface (or to intelligent traffic control component)
-int RxArrivalTablePort=6666; // The port that arrival table data comes from
+void setupConnection(); //  setup socket connection to send the optimize schedule to traffic controller interface or intelligent traffic control component. Also to settup connection to the trajectory aware component inorder to get arrival table
+int RxArrivalTablePort=33333; // The port that arrival table data comes from
+int TrajRequestPort=20000; // The port to send request to trajectory aware componet to acquire  arrival table
 int ArrTabMsgID=66;
 int TxOPTPort=5555;          // the port that the optimal phase timing plane sends to SignalControl (COP)
 int TxEventListPort=44444;
 int OPTMsgID=55;
 char cOPTbuffer[256];
 
-char temp_log[256];
-double MaxGrnExtPortion=0.15;  // Extended the MaxGrn of requested phases to this portion
+char temp_log[512];
+double MaxGrnExtPortion=.15;  // Extended the MaxGrn of requested phases to this portion. 1ant: keep the number with no 0 before .  , we need this format when we build the glpk mod file. GenerateMod function
 double dGlobalGmax[8]={0.0}; // this vector get the values of ConfigIS.Gmax an will keep those values unless we need to change the max green time to ConfigIS.Gmax*(1+MaxGrnExtPortion)
 RSU_Config ConfigIS;
 RSU_Config ConfigIS_EV;
@@ -135,16 +144,40 @@ int HavePedCall=0;    // if there is ped call in Req, =1; else =0.
 char tmp_log[256];
 int CurPhaseStatus[8]={0};    // when do phaseReading: the same results as phase_read withoug conversion
 PhaseStatus phase_read={0};   // value would be {1,3,4}
-char INTip[64];
+double red_elapse_time[8];   //Red elapse time of each phase to be used in EVLS
+char INTip[128];
 char INTport[16];
 int CombinedPhase[8]={0};
 int Phase_Status[NumPhases]={0};
 int codeUsage=1;
 int congested=0;
+//Parameters for trajectory control
+char buf_traj[500000];  //The Trajectory message from MRP_EquippedVehicleTrajecotryAware
+LinkedList <ConnectedVehicle> trackedveh;
+LinkedList <ConnectedVehicle> vehlist_each_phase;
+LinkedList <ConnectedVehicle> vehlist_phase; 
+LinkedList <ConnectedVehicle> vehlist_lane;
+int NoVehInQ[8][6]; // There is a list for all vehicles in each lane of each phase. It is assumed there are at most 8 phases and at most 6 lanes per phase.
+double QSize[8][6]; // length of the queue in each lane (in meter)
+
+
+
+bool bLaneSignalState[48]; // is 1 for the lanes that their signal is green, otherwise 0 
+double dQDischargingSpd=3.0;
+double dQueuingSpd=2.0;
+int currentTotalVeh=0;   
+
+int skip_phase[8]; //if no vehicle arrives for a phase, then this phase can be skipped.
+//Parameters for EVLS
+float penetration=1;      //penetration rate
+float dsrc_range=200;
+int LaneNo[8]; // this array will record the number of lanes per each phase. 
+int LaneNo2[8]; // this array will record the number of lanes per each phase. But if two phases belong to one approach, the LaneNo2 value for the second phase of the approach include the Laneno2 valuse of the first phase as well. As example, if phase 4 has 3 lanes and phase 7 (same approach) has 2 lanes, then LaneNo2[4-1]=3 and LaneNo2[7-1]= 3+2. This array is used in calculateQ function. 
+int TotalLanes=0;
 
 int outputlog(char *output); // for logging 
 int GLPKSolutionValidation(char *filename); //determine whether glpksolver get a feasible solution
-void GenerateMod(char *Filename,RSU_Config ConfigIS,char *OutFilename);  // generate .mod file for glpk optimizer , //------- If there is no EV, using ConfigIS; if there is EV, using ConfigIS_EV. --------//
+void GenerateMod(char *Filename,RSU_Config ConfigIS,char *OutFilename,int haveEV);  // generate .mod file for glpk optimizer , //------- If there is no EV, using ConfigIS; if there is EV, using ConfigIS_EV. --------//
 int numberOfPlannedPhase(double adCritPont[3][5], int rng);
 void packOPT(char * buf,double cp[2][3][5],int msgCnt);
 void printCriticalPoints();
@@ -152,6 +185,7 @@ void Construct_eventlist(double cp[2][3][5]);
 void Construct_eventlist_EV(double cp[2][3][5],int omitPhas[8]);
 void Pack_Event_List(byte* tmp_event_data,int &size);
 double findLargestCP(double cp[3][5], int rng, int maxNumOfPlannedPhases);
+void matchTheBarrierInCPs_EV(double cp[2][3][5]);
 void matchTheBarrierInCPs(double cp[2][3][5]);
 int  RequestPhaseInList(LinkedList<ReqEntry> ReqList,int phase);  // return the position of the phase in the ReqList
 int  FindRingNo(int phase);
@@ -159,7 +193,7 @@ void PrintList2File(char *Filename,LinkedList<ReqEntry> &ReqList,int BroadCast=0
 void PrintList2File_EV(char *Filename,LinkedList<ReqEntry> &ReqList,int BroadCast=0);
 void ReqListFromFile(char *filename,LinkedList<ReqEntry>& Req_List);
 void ReqListFromFile_EV(char *filename,LinkedList<ReqEntry>& Req_List);
-void LinkList2DatFile(LinkedList<ReqEntry> Req_List,char *filename,double InitTime[2],int InitPhase[2],double GrnElapse[2],double transitWeigth, double truckWeigth, double coordinationweigt);
+void LinkList2DatFile(LinkedList<ReqEntry> Req_List,char *filename,double InitTime[2],int InitPhase[2],double GrnElapse[2],double transitWeigth, double truckWeigth, double coordinationweigt,double dVehDistToStpBar[130],double dVehSpd[130],int iVehPhase[130],double Ratio[130],double indic[130],int laneNumber[130],double qsize[48],double Tq[130]);
 void LinkList2DatFileForEV(LinkedList<ReqEntry> Req_List,char *filename,double InitTime[2],int InitPhase[2],double GrnElapse[2],RSU_Config configIS, int ChangeMaxGrn=0);
 void removeZeroWeightReq(LinkedList<ReqEntry> Req_List_,double dTrnWeight,double dTrkWeight, LinkedList<ReqEntry> &Req_List_New);
 void FindReqWithSamePriority(LinkedList<ReqEntry> Req_List_, int priority,LinkedList<ReqEntry> &Req_List_New);
@@ -179,20 +213,27 @@ void deductSolvingTimeFromCPs(double aCriticalPoints[2][3][5],double tt2,double 
 void PrintPlan2Log(char *resultsfile);
 void PrintFile2Log(char *resultsfile);
 void GLPKSolver();
+void get_lane_no();   //get number of lanes each phase from Lane_No.txt file
+void get_lane_phase_mapping(int phase[4][2], int PhaseOfEachLane[48]);
+void UnpackTrajData1(char* ablob); 
+void calculateQ(int Phaseofapp[4][2],int PhaseOfEachLane[48], double qsize[48]);
+void extractOptModInputFromTraj(double dVehDistToStpBar[130],double dVehSpd[130],int iVehPhase[130],double Ratio[130],double indic[130],int laneNumber[130],double dQsizeOfEachLane[48],double Tq[130], int phase[4][2], int PhaseOfEachLane[48],int InitPhase[2],double GrnElapse[2]);
 
 int main ( int argc, char* argv[] )
 {
-	
-     int ch;
-     while ((ch = getopt(argc, argv, "c:s:")) != -1) 
+	 int ch;
+     int iExtention=0;
+     while ((ch = getopt(argc, argv, "c:s:e:")) != -1) 
      {
 		switch (ch) 
 		{
 		    case 'c':
 				codeUsage=atoi (optarg);
-				if (codeUsage==1)
+				if (codeUsage==ADAPTIVE_PRIORITY)
+					printf ("Code usage is for integrated Prioirty alg and Adaptive Control \n");
+				else if (codeUsage==PRIORITY)
 					printf ("Code usage is for Prioirty Alg + Actuation \n");
-				else
+				else if (codeUsage==COP_AND_PRIORITY)
 					printf ("Code usage is for Prioirty Alg + COP \n");
 				break;
 			case 's':
@@ -202,21 +243,34 @@ int main ( int argc, char* argv[] )
 				else
 					printf (" Normal Traffic \n");
 				break;
+			case 'e':
+				iExtention=atoi (optarg);
+				MaxGrnExtPortion=iExtention/100;
+				break;
             default:
 			     return 0;
 		 }
     }
+    int numbytes=0;
 	int iOPTmsgCnt=0;
-	int iArrTabMsgCnt;
-    unsigned int type = 0;
-    int SEND_OFF_CMD=3;
+	//int iArrTabMsgCnt;
+   // unsigned int type = 0;
+   // int SEND_OFF_CMD=3;
     int RequestFileNo=0;
     int IsListEmpty=1;  // ---IsListEmpty==1 means empty, will do nothing; =0, is not empty, need to carry on the plan.--//
     int InitPhase[2];
     double InitTime[2],GrnElapse[2];
-    int coordinationIndicator=0;
- 
-    double TimeStamp[2][2];   // For Recording the end time of each cycle including the InitTime. // MZ changed to consider 2 cycles! 10/8/14
+	ConnectedVehicle temp_veh;
+	int PhaseOfEachApproach[4][2]; // Use Lane_Phase_File_Name to populate this array
+	int PhaseOfEachLane[48]; // assume there are 48 approaching lanes at most
+	double dVehDistToStpBar[130]; // at most 130 vehicles is considered in the adaptive control optimization model
+	double dVehSpd[130];
+	int iVehPhase[130];
+	double Ratio[130]; // one of the inputs of mathematical model
+	double indic[130]; // one of the inputs of mathematical model
+	int laneNumber[130]; // lane number of each car 
+	double dQsizeOfEachLane[48];
+	double Tq[130]; // The amount of time each vehicle has stopped 
 
     //------log file name with Time stamp---------------------------
     char timestamp[128];
@@ -237,6 +291,15 @@ int main ( int argc, char* argv[] )
     //-------(1) Read the name of "configinfo_XX.txt" into "ConfigFile" from ConfigInfo.txt--------//
     //-------(2) Read in the CombinedPhase[8] for finding the split phases--
     get_configfile();
+	
+	//Get number of lanes each phase
+	get_lane_no();
+	//Get phase of each lane
+	get_lane_phase_mapping(PhaseOfEachApproach,PhaseOfEachLane);
+	
+	//cout<<"Number of lanes of each phase is:";
+	//cout<<LaneNo[0]<<" "<<LaneNo[1]<<" "<<LaneNo[2]<<" "<<LaneNo[3]<<" "<<LaneNo[4]<<" "<<LaneNo[5]<<" "<<LaneNo[6]<<" "<<LaneNo[7]<<endl;
+	
     //-----------------Read in the ConfigIS Every time in case of changing plan-----------------------//
     int curPlan=CurTimingPlanRead();
     sprintf(tmp_log,"Current timing plan is:\t%d\n",curPlan);  
@@ -246,10 +309,13 @@ int main ( int argc, char* argv[] )
     PrintPlan2Log(ConfigFile);
     ReadInConfig(ConfigFile,PriorityConfigFile); // Get Configuration from priority configurationa and controler
     PrintRSUConfig();
-    GenerateMod(ConfigFile,ConfigIS,"/nojournal/bin/NewModel.mod");
-    setupConnection();
+    GenerateMod(ConfigFile,ConfigIS,"/nojournal/bin/NewModel.mod",0);
+    setupConnection(); // to get arrival time from trajectory aware component and send the Event list to Signal Controller OR to send the Event list to COP OR to only send the Event list to Signal Controller
     int addr_length = sizeof ( recvaddr );
+	int recv_data_len;
     //--------------End of Read in the ConfigIS Every time in case of changing plan-----------------------//  //---- If we have EV priority, then we need to generate the special "NewModelData_EV.mod" through "ConfigIS" and "requested phases"
+	
+	
     //--- When in Red or Yellow, init1 & 2 are non-zero, Grn1&Grn2 (GrnElapse) are zero
     //--- When in Green, init1 & 2 are zero, Grn1&Grn2 are non-zero
     InitTime[0]=0; 
@@ -257,11 +323,36 @@ int main ( int argc, char* argv[] )
     GrnElapse[0]=0;
     GrnElapse[1]=0;
     
+	
+	for(int i=3;i>0;i--) //warm up to see if we are connected to controller
+    {
+        PhaseTimingStatusRead();
+        Phases.UpdatePhase(phase_read);
+        Phases.Display();
+        //Phases.RecordPhase(signal_plan_file);
+        msleep(200);
+    }
+    //Record current red elapse time information
+	//Notes: since COP always runs at the beginning of the green time (2 phases), actually we should calculate the duration of previous red phase for the queue length estimation
+	//for the 2 phases just turned red, the red duration time could be 0 (or in actually calculation they are very small)
+	//for other four phases, just in the middle of red duration
+	double red_start_time[8];
+	int previous_signal_color[8];
+	//initialize red start time
+	for(int i=0;i<8;i++)
+	{
+		previous_signal_color[i]=phase_read.phaseColor[i];
+		if(phase_read.phaseColor[i]==1)
+			red_start_time[i]=GetSeconds();
+		else
+			red_start_time[i]=0;
+	}
+	
+    
+    double t_1,t_2,t_RequestTraj=0.0; //---time stamps used to determine wether we connect to the RSE or not. Also time to request Arrivale Table in case the code is used for adaptive control too
     while ( true )
     {
-		double t_1,t_2; //---time stamps used to determine wether we connect to the RSE or not.
 		t_1=GetSeconds();
-		//---- Read the signal information------//
 		PhaseTimingStatusRead();
 		t_2=GetSeconds();
 		if( (t_2-t_1)<2.0 ) // We do connect to RSE
@@ -274,6 +365,19 @@ int main ( int argc, char* argv[] )
 				InitPhase[ii]=Phases.InitPhase[ii]+1;   //{1-8}
 				InitTime[ii] =Phases.InitTime[ii];      // ALSO is the (Yellow+Red) Left for the counting down time ***Important***
 				GrnElapse[ii]=Phases.GrnElapse[ii];     // If in Green
+			}
+			//Calculate red elapse time for each phase, if the signal turns to green, keep the previous red duration until turns to red again (TO BE USED IN ELVS)
+			for(int i=0;i<8;i++)
+			{
+				if (previous_signal_color[i]!=1 && phase_read.phaseColor[i]==1)  //signal changed from other to red
+				{
+					red_start_time[i]=GetSeconds();
+				}		
+				if (phase_read.phaseColor[i]==1)
+				{
+					red_elapse_time[i]=GetSeconds()-red_start_time[i];
+				}
+				previous_signal_color[i]=phase_read.phaseColor[i];
 			}
 			
 			cout<< " ***** initial phase of ring 1 is "<<  InitPhase[0] << " Ring 2  is "<<InitPhase[1]<< endl;
@@ -389,7 +493,7 @@ int main ( int argc, char* argv[] )
 					RSUConfig2ConfigFile("/nojournal/bin/ConfigInfo_EV.txt",Phase_Infom,NoRepeatSize,ConfigIS);
 					PrintFile2Log("/nojournal/bin/ConfigInfo_EV.txt");// Log the EV configInfo.
 					delete [] Phase_Infom;
-					GenerateMod("/nojournal/bin/ConfigInfo_EV.txt",ConfigIS,"/nojournal/bin/NewModel_EV.mod"); // We need all {2,4,6,8}
+					GenerateMod("/nojournal/bin/ConfigInfo_EV.txt",ConfigIS,"/nojournal/bin/NewModel_EV.mod",HaveEVInList); // We need all {2,4,6,8}
 					ConfigIS_EV=ReadInConfig("/nojournal/bin/ConfigInfo_EV.txt",1);
 					RequestFileNo++;
 					PrintRSUConfig2File(ConfigIS_EV,tmp_log);
@@ -410,7 +514,7 @@ int main ( int argc, char* argv[] )
 				}
 				if ((HaveEVInList==0)&&(Req_List_Combined.ListSize()>0)) // Atleast one priority vehicle except EV is in the list!
 				{
-					LinkList2DatFile(Req_List_Combined,prioritydatafile,InitTime,InitPhase,GrnElapse, ConfigIS.iTransitWeight, ConfigIS.iTruckWeight,ConfigIS.dCoordinationWeight ); // construct .dat file for the glpk
+					LinkList2DatFile(Req_List_Combined,prioritydatafile,InitTime,InitPhase,GrnElapse, ConfigIS.iTransitWeight, ConfigIS.iTruckWeight,ConfigIS.dCoordinationWeight,dVehDistToStpBar,dVehSpd,iVehPhase,Ratio,indic,laneNumber,dQsizeOfEachLane, Tq ); // construct .dat file for the glpk
 					PrintFile2Log(prioritydatafile); // Log the .dat file for glpk solver
 					outputlog("\n");  
 					RequestFileNo++;
@@ -437,22 +541,25 @@ int main ( int argc, char* argv[] )
 						readOptPlanFromFileForEV(resultsfile,adCriticalPoints, omitPhase);
 					else
 						readOptPlanFromFile(resultsfile,adCriticalPoints);
-					
+				
 					deductSolvingTimeFromCPs(adCriticalPoints,t2,t1);
 					
-								
+							
 					// If the Solver works jointly with COP, we pack the Critical Points and send it to COP, othewise we transfer the CP to event list and send the event list to controller.
-					if (codeUsage==1) // Send to Interface 
+					if (codeUsage==PRIORITY) // Send to Interface 
 					{
 						Eventlist_R1.ClearList();
 						Eventlist_R2.ClearList();
 						if(HaveEVInList==1)
 						{
-							matchTheBarrierInCPs(adCriticalPoints);
+							matchTheBarrierInCPs_EV(adCriticalPoints);
 							Construct_eventlist_EV(adCriticalPoints,omitPhase);
 						}	
 						else
+						{
 							Construct_eventlist(adCriticalPoints);
+							matchTheBarrierInCPs(adCriticalPoints);
+						}
 						byte tmp_event_data[500];
 						int size=0;
 						Pack_Event_List(tmp_event_data, size);
@@ -469,8 +576,8 @@ int main ( int argc, char* argv[] )
 							cout<< temp_log<< endl;
 						}
 					}
-					else // Send to COP
-					{
+					else if (codeUsage==COP_AND_PRIORITY) // Send to COP
+					{	
 						iOPTmsgCnt++;
 						iOPTmsgCnt=iOPTmsgCnt%127;
 						packOPT(cOPTbuffer,adCriticalPoints,iOPTmsgCnt);
@@ -489,12 +596,133 @@ int main ( int argc, char* argv[] )
 				outputlog("No feasible solution!\n");
 				}
 			}
-			else  // else: if(ReqListUpdateFlag<=0)
+			else if (codeUsage==ADAPTIVE_PRIORITY) // Integrated Priority Alg and Adaptive Control
+			{
+				if (t_2-t_RequestTraj>4) 	// if is it time to get arrival table from traj. aware componet and solve the problem. It is supposed to get the arrival table every 2 seconds
+				{
+					t_RequestTraj=GetSeconds();
+					char buf[64]="Request Trajectory from signal control";   // sending the request to Trajectory Aware component 
+					cout<<"Sent Request!"<<endl;
+					//send request for trajectory data
+					recvaddr.sin_port = htons(TrajRequestPort);
+					numbytes = sendto(sockfd,buf,sizeof(buf) , 0,(struct sockaddr *)&recvaddr, addr_length);
+					recv_data_len = recvfrom(sockfd, buf_traj, sizeof(buf_traj), 0,
+									(struct sockaddr *)&sendaddr, (socklen_t *)&addr_length);
+					if(recv_data_len<0)
+					{
+						printf("Receive Request failed\n");
+						continue;
+					}
+					sprintf(temp_log,"Received Trajectory Data!\n");
+					outputlog(temp_log); cout<<temp_log;
+					trackedveh.ClearList(); //clear the list for new set of data
+					
+					//unpack the trajectory data and save to trackedveh list
+					UnpackTrajData1(buf_traj);
+					sprintf(temp_log,"The Number of Vehicle Received is: %d\n",trackedveh.ListSize());
+					outputlog(temp_log); cout<<temp_log;
+			//		sprintf(temp_log,"The red elapse time for each phase is:\n");
+			//		outputlog(temp_log);
+			//		sprintf(temp_log,"%f %f %f %f %f %f %f %f \n",red_elapse_time[0],red_elapse_time[1],red_elapse_time[2],red_elapse_time[3],red_elapse_time[4],red_elapse_time[5],red_elapse_time[6],red_elapse_time[7]);
+			//		outputlog(temp_log);
+					
+					sprintf(temp_log,"Current time is: %f \n",t_RequestTraj);
+					outputlog(temp_log);
+						   
+					if (penetration>=0.95)   //construct arrival table directly
+					{
+						trackedveh.Reset();
+						cout<<"********************************"<<endl;
+						calculateQ(PhaseOfEachApproach,PhaseOfEachLane,dQsizeOfEachLane);
+						extractOptModInputFromTraj(dVehDistToStpBar,dVehSpd,iVehPhase,Ratio,indic,laneNumber,dQsizeOfEachLane,Tq,PhaseOfEachApproach,PhaseOfEachLane,InitPhase,GrnElapse);
+					}else // calling EVLS 
+					{
+						//Algorithm to infer vehicle location and speed based on sample vehicle data and create arrival table
+						cout<<"Estimating Location and Position of Unequipped Vehicle:"<<endl;
+						for (int i=0;i<8;i++)  
+						{	
+						
+							//Assign vehicles of each phase to the vehlist_each_phase
+							trackedveh.Reset();
+							vehlist_each_phase.ClearList();
+							while(!trackedveh.EndOfList())  
+							{
+								if (trackedveh.Data().req_phase==i+1)  //assign to the same phase
+								{
+									temp_veh=trackedveh.Data();
+									vehlist_each_phase.InsertRear(temp_veh);
+								}
+							trackedveh.Next();
+							}
+						
+							
+							sprintf(temp_log,"Phase: %d\n",i+1);
+							outputlog(temp_log); cout<<temp_log;
+							
+							//sprintf(temp_log,"The input list is:\n");
+							//outputlog(temp_log); cout<<temp_log;
+							vehlist_each_phase.Reset();
+							for(int j=0;j<vehlist_each_phase.ListSize();j++)
+							{
+							sprintf(temp_log,"%d %lf %lf %lf %d %d %d %lf\n",vehlist_each_phase.Data().TempID,vehlist_each_phase.Data().Speed,vehlist_each_phase.Data().stopBarDistance,vehlist_each_phase.Data().acceleration,vehlist_each_phase.Data().approach,vehlist_each_phase.Data().lane,vehlist_each_phase.Data().req_phase,vehlist_each_phase.Data().time_stop);
+							outputlog(temp_log); //cout<<temp_log;
+							vehlist_each_phase.Next();
+							}
+							
+							cout<<"The number of lanes is "<<LaneNo[i]<<endl;
+							
+							if (vehlist_each_phase.ListSize()!=0)  //There is vehicle in the list 
+								EVLS(i+1, t_RequestTraj, red_elapse_time[i], LaneNo[i]);
+						}
+						trackedveh.Reset();
+						cout<<"********************************"<<endl;
+						calculateQ(PhaseOfEachApproach,PhaseOfEachLane,dQsizeOfEachLane);
+						extractOptModInputFromTraj(dVehDistToStpBar,dVehSpd,iVehPhase,Ratio,indic,laneNumber,dQsizeOfEachLane,Tq,PhaseOfEachApproach,PhaseOfEachLane,InitPhase,GrnElapse);
+				
+					}
+					
+					LinkList2DatFile(Req_List_Combined,prioritydatafile,InitTime,InitPhase,GrnElapse, ConfigIS.iTransitWeight, ConfigIS.iTruckWeight,ConfigIS.dCoordinationWeight,dVehDistToStpBar,dVehSpd,iVehPhase,Ratio,indic,laneNumber,dQsizeOfEachLane,Tq); // construct .dat file for the glpk
+					
+					PrintFile2Log(prioritydatafile); // Log the .dat file for glpk solver
+					double t1_Solve=GetSeconds();
+					GLPKSolver();  
+					double t2_Solve=GetSeconds();
+					sprintf(tmp_log,"Time for solving the problem is about: {%.3f}.\n",t2_Solve-t1_Solve); 
+					outputlog(tmp_log);
+					cout<< tmp_log<<endl;
+					int success2=GLPKSolutionValidation(resultsfile);
+					cout<<"success2"<<success2<<endl;
+					if (success2==0)  
+					{	
+						
+						Eventlist_R1.ClearList();
+						Eventlist_R2.ClearList();				
+						readOptPlanFromFile(resultsfile,adCriticalPoints);
+						deductSolvingTimeFromCPs(adCriticalPoints,t2_Solve,t1_Solve);
+						Construct_eventlist(adCriticalPoints);
+						
+						byte tmp_event_data[500];
+						int size=0;
+						Pack_Event_List(tmp_event_data, size);
+						char* event_data;
+						event_data= new char[size];			
+						for(int i=0;i<size;i++)
+							event_data[i]=tmp_event_data[i];	
+						recvaddr.sin_port = htons(TxEventListPort);
+						if (sendto(sockfd,event_data,size+1 , 0,(struct sockaddr *)&recvaddr, addr_length))
+						{
+							sprintf(temp_log," The new Event List sent to SignalControllerInterface, The size is %d and time is : %.2f.......... \n", size, GetSeconds()); 
+							outputlog(temp_log);
+							cout<< temp_log<< endl;
+						}
+					}
+				} //end of if (t_2-t_RequestTraj>4) 	// if is it time to get arrival table from traj. aware componet and solve the problem. It is supposed to get the arrival table every 2 seconds
+			}else   // if there is the priority flag is zero and if the codeusage is Priority Control and Actuation
 			{
 				sprintf(tmp_log,"No Need to solve, At time: %s",GetDate());
 				outputlog(tmp_log); outputlog("\n");
-				msleep(100);   // TODO: NEED this longer 0413
-			}  // End of if(ReqListUpdateFlag<=0)
+				msleep(100);   		
+			}
 		}
 		else  // // We do not connect to RSE
 		{
@@ -569,7 +797,7 @@ void setupConnection()
 
 
 	recvaddr.sin_family = AF_INET;
-	recvaddr.sin_port = htons(TxOPTPort);   // MPRsolver uses this port to send the optimal solution to 
+	recvaddr.sin_port = htons(TrajRequestPort);   // MPRsolver uses this port to send the optimal solution to ... COP or Controller
 	recvaddr.sin_addr.s_addr = inet_addr("127.0.0.1") ; //INADDR_BROADCAST;
 	memset(recvaddr.sin_zero,'\0',sizeof recvaddr.sin_zero);
 }
@@ -621,7 +849,7 @@ int GLPKSolutionValidation(char *filename)
 
   
 
-void GenerateMod(char *Filename,RSU_Config ConfigIS,char *OutFilename)
+void GenerateMod(char *Filename,RSU_Config ConfigIS,char *OutFilename,int haveEVinList)
 {
 	
 	//-------reading the signal configuration file ---------
@@ -735,7 +963,7 @@ void GenerateMod(char *Filename,RSU_Config ConfigIS,char *OutFilename)
     double iTruckWeight;
     int iCoordinationOffset;
     int iCoordinationCycle;
-    int iCoordinationSplit;
+    double dCoordinationSplit[2];
     dCoordinationWeight=ConfigIS.dCoordinationWeight;
     iCoordinatedPhase[0]=ConfigIS.iCoordinatedPhase[0];
     iCoordinatedPhase[1]=ConfigIS.iCoordinatedPhase[1];
@@ -743,7 +971,8 @@ void GenerateMod(char *Filename,RSU_Config ConfigIS,char *OutFilename)
     iTruckWeight=ConfigIS.iTruckWeight;
     iCoordinationCycle=ConfigIS.iCoordinationCycle;
     iCoordinationOffset=ConfigIS.iCoordinationOffset;
-    iCoordinationSplit=ConfigIS.iCoordinationSplit;
+    dCoordinationSplit[0]=ConfigIS.dCoordinationSplit[0];
+    dCoordinationSplit[1]=ConfigIS.dCoordinationSplit[1];
 
 
     // ---------------- Writing the .mod  file------------------
@@ -757,7 +986,7 @@ void GenerateMod(char *Filename,RSU_Config ConfigIS,char *OutFilename)
         exit(1);
     }
 
-    int PhaseSeqArray[8],PhaseNumArray[8];
+    int PhaseSeqArray[8];
     int kk=0;
 
      if(P11.size()==1)
@@ -784,7 +1013,7 @@ void GenerateMod(char *Filename,RSU_Config ConfigIS,char *OutFilename)
     }
     else if(P12.size()==2)
     {
-        FileMod<<"set P12:={"<<P12[0]<<","<<P12[1]<<"};  \n";
+        FileMod<<"set P12:={"<<P12[0]<<","<<P12[1]<<"};\n";
         PhaseSeqArray[kk]=P12[0];
         kk++;
         PhaseSeqArray[kk]=P12[1];
@@ -793,13 +1022,13 @@ void GenerateMod(char *Filename,RSU_Config ConfigIS,char *OutFilename)
 
      if(P21.size()==1)
     {
-        FileMod<<"set P21:={"<<P21[0]<<"}; \n";
+        FileMod<<"set P21:={"<<P21[0]<<"};\n";
         PhaseSeqArray[kk]=P21[0];
         kk++;
     }
     else if(P21.size()==2)
     {
-        FileMod<<"set P21:={"<<P21[0]<<","<<P21[1]<<"};  \n";
+        FileMod<<"set P21:={"<<P21[0]<<","<<P21[1]<<"};\n";
         PhaseSeqArray[kk]=P21[0];
         kk++;
         PhaseSeqArray[kk]=P21[1];
@@ -808,13 +1037,13 @@ void GenerateMod(char *Filename,RSU_Config ConfigIS,char *OutFilename)
 
      if(P22.size()==1)
     {
-        FileMod<<"set P22:={"<<P22[0]<<"}; \n";
+        FileMod<<"set P22:={"<<P22[0]<<"};\n";
         PhaseSeqArray[kk]=P22[0];
         kk++;
     }
     else if(P22.size()==2)
     {
-        FileMod<<"set P22:={"<<P22[0]<<","<<P22[1]<<"};  \n";
+        FileMod<<"set P22:={"<<P22[0]<<","<<P22[1]<<"};\n";
         PhaseSeqArray[kk]=P22[0];
         kk++;
         PhaseSeqArray[kk]=P22[1];
@@ -840,192 +1069,349 @@ void GenerateMod(char *Filename,RSU_Config ConfigIS,char *OutFilename)
     //------------- Print the Main body of mode----------------
     FileMod<<"set K  := {1,2};\n";
     FileMod<<"set J  := {1..10};\n";
-    FileMod<<"set P2  :={1..8};  \n";
-    FileMod<<"set I  :={1..2};  \n";
-    FileMod<<"set T  := {1..10}; 	# at most 10 different types of vehicle may be considered , EV are 1, Transit are 2, Trucks are 3  \n";      
+	if (codeUsage==2) // If arrival table is considered ( in Integrated Priority and Adaptive Control)
+	{
+			FileMod<<"set I  :={1..130};\n";
+			FileMod<<"set L  :={1..20};\n";
+	}
+    FileMod<<"set P2  :={1..8};\n";
+   
+    FileMod<<"set T  := {1..10};\n";	// at most 10 different types of vehicle may be considered , EV are 1, Transit are 2, Trucks are 3  \n";      
+    FileMod<<"set C  := {1..4};\n";	// at most 4 rcoordination requests may be considered, 2 phase * 2 cycles ahead 
     
     FileMod<<"  \n";
-    FileMod<<"param y    {p in P}, >=0,default 0;  \n";
-    FileMod<<"param red  {p in P}, >=0,default 0;  \n";
-    FileMod<<"param gmin {p in P}, >=0,default 0;  \n";
-    FileMod<<"param gmax {p in P}, >=0,default 0;  \n";
-    FileMod<<"param init1,default 0;  \n";
-    FileMod<<"param init2,default 0;  \n";
-    FileMod<<"param Grn1, default 0;  \n";
-    FileMod<<"param Grn2, default 0;  \n";
-    FileMod<<"param SP1,  integer,default 0;  \n";
-    FileMod<<"param SP2,  integer,default 0;  \n";
-    FileMod<<"param M:=9999,integer;  \n";
-    FileMod<<"param alpha:=100,integer;  \n";
-    FileMod<<"param Rl{p in P, j in J}, >=0,  default 0;  \n";
-    FileMod<<"param Ru{p in P, j in J}, >=0,  default 0;  \n";
-    FileMod<<"param Tq{p in P, j in J}, >=0,  default 5;  \n";
+    FileMod<<"param y    {p in P}, >=0,default 0;\n";
+    FileMod<<"param red  {p in P}, >=0,default 0;\n";
+    FileMod<<"param gmin {p in P}, >=0,default 0;\n";
+    FileMod<<"param gmax {p in P}, >=0,default 0;\n";
+    FileMod<<"param init1,default 0;\n";
+    FileMod<<"param init2,default 0;\n";
+    FileMod<<"param Grn1, default 0;\n";
+    FileMod<<"param Grn2, default 0;\n";
+    FileMod<<"param SP1,  integer,default 0;\n";
+    FileMod<<"param SP2,  integer,default 0;\n";
+    FileMod<<"param M:=9999,integer;\n";
+    FileMod<<"param alpha:=100,integer;\n";
+    FileMod<<"param Rl{p in P, j in J}, >=0,  default 0;\n";
+    FileMod<<"param Ru{p in P, j in J}, >=0,  default 0;\n";
+    FileMod<<"param Cl{p in P, c in C}, >=0,  default 0;\n";
+    FileMod<<"param Cu{p in P, c in C}, >=0,  default 0;\n";
     FileMod<<"  \n";
     
     if (dCoordinationWeight<0)
 			dCoordinationWeight=0.0;
-	if (iCoordinatedPhase[0]==0)
+	if (iCoordinatedPhase[0]==0) // in the case priorityConfiguration.txt file is not set properly!
 		iCoordinatedPhase[0]=2;
 	if (iCoordinatedPhase[1]==0)
 		iCoordinatedPhase[1]=6;
-	FileMod<<"param current,>=0,default 0;   # current is  mod(time,cycle)  \n";
-	FileMod<<"param coord, :="<<dCoordinationWeight <<"; 	# this paramter indicated where we consider coorrdination or not  \n";
-	FileMod<<"param isItCoordinated, :=(if coord>0 then 1 else 0); \n";
-	FileMod<<"param cycle, :="<<iCoordinationCycle  <<";    # if we have coordination, the cycle length  \n";
-	FileMod<<"param offset,:="<<iCoordinationOffset <<";   # if we have coordination, the offset  \n";
-	FileMod<<"param split, :="<<iCoordinationSplit  <<";    # if we have coordination, the split  \n";
-	FileMod<<"param coordphase1,:="<< iCoordinatedPhase[0]  <<";    # if we have coordination, thecoordinated phase in ring1  \n";
-	FileMod<<"param coordphase2,:="<< iCoordinatedPhase[1]  <<";    # if we have coordination, thecoordinated phase in ring2  \n";
-	FileMod<<"param isCurPhCoord1, :=(if coordphase1=SP1 then 1 else 0);  \n";
-	FileMod<<"param isCurPhCoord2, :=(if coordphase2=SP2 then 1 else 0);  \n";
-	FileMod<<"param earlyReturnPhase1,  := (if (isCurPhCoord1=1 and current>gmax[coordphase1] and coordphase1>0) then 1 else 0); #  if we are in earlier coordinated phase green time, this earlyReturnPhase is 1 \n"; 
-	FileMod<<"param earlyReturnPhase2,  := (if (isCurPhCoord2=1 and current>gmax[coordphase2] and coordphase1>0) then 1 else 0);  \n";
+	if (haveEVinList==1)
+		dCoordinationWeight=0;
+	
+	FileMod<<"param current,>=0,default 0;\n"; // # current is  mod(time,cycle)
+	FileMod<<"param coord, :="<<dCoordinationWeight <<";\n"; // 	# this paramter indicated where we consider coorrdination or not  
+	FileMod<<"param isItCoordinated, :=(if coord>0 then 1 else 0);\n";
+	FileMod<<"param SumOfMinGreen1, :=  ( sum{p in P11} gmin[p] ) + ( sum{p in P12} gmin[p] ) ;\n";
+	FileMod<<"param SumOfMinGreen2, :=  ( sum{p in P21} gmin[p] ) + ( sum{p in P22} gmin[p] ) ;\n";
+	FileMod<<"param cycle, :="<<iCoordinationCycle  <<";\n"; //    # if we have coordination, the cycle length  
+	//FileMod<<"param offset,:="<<iCoordinationOffset <<";   # if we have coordination, the offset  \n";
+	//FileMod<<"param split, :="<<iCoordinationSplit  <<";    # if we have coordination, the split  \n";
+	FileMod<<"param coordphase1,:="<< iCoordinatedPhase[0]  <<";\n"; //    # if we have coordination, thecoordinated phase in ring1  
+	FileMod<<"param coordphase2,:="<< iCoordinatedPhase[1]  <<";\n"; //    # if we have coordination, thecoordinated phase in ring2  
+	FileMod<<"param isCurPhCoord1, :=(if coordphase1=SP1 then 1 else 0);\n";
+	FileMod<<"param isCurPhCoord2, :=(if coordphase2=SP2 then 1 else 0);\n";
+	//FileMod<<"param earlyReturn,  := (if ( ( isCurPhCoord1=1 and ( current>iCoordinationSplit) ) then 1 else 0); #  if we are in earlier coordinated phase green time, this earlyReturnPhase is 1 \n";  // this is an importnt thereshold!!!
+	//FileMod<<"param earlyReturn,  := (if ( ( isItCoordinated=1 and ( current> ( gmax[coordphase1] + SumOfMinGreen1 - gmin[coordphase1] ) ) and coordphase1>0)  or 	(isCurPhCoord2=1 and (current>( gmax[coordphase2] + SumOfMinGreen2 - gmin[coordphase2] )) and coordphase2>0) ) then 1 else 0); #  if we are in earlier coordinated phase green time, this earlyReturnPhase is 1 \n";  // this is an importnt thereshold!!!
+	//FileMod<<"param earlyReturnPhase2,  := (if ( (isCurPhCoord2=1 and (current>( gmax[coordphase2] + SumOfMinGreen2 - gmin[coordphase2] ) and coordphase2>0) ) then 1 else 0);  \n";
+	FileMod<<"param earlyReturn,   := (if ( ( isItCoordinated=1 and ( current> 0.75*cycle ) and coordphase1>0)  or 	(isItCoordinated=1 and ( current> 0.75*cycle ) and coordphase2>0) ) then 1 else 0); \n"; //  if we are in earlier coordinated phase green time, this earlyReturnPhase is 1 
+	FileMod<<"param afterSplit,    := (if ( ( isItCoordinated=1 and  Grn1>=gmax[coordphase1] and SP1=coordphase1 and current>= gmax[coordphase1]/"<<1+MaxGrnExtPortion+0.1 <<" and current<= gmax[coordphase1])  or 	(isItCoordinated=1 and ( Grn2>=gmax[coordphase2] ) and SP2=coordphase2 and current>= gmax[coordphase1]/"<<1+MaxGrnExtPortion+0.1 <<" and current<=gmax[coordphase2]) ) then 1 else 0); \n"; 
+	FileMod<<"param inSplit,       := (if ( ( isItCoordinated=1 and  SP1=coordphase1 and current<gmax[coordphase1]/"<<1+MaxGrnExtPortion+0.1 <<"  )  or (isItCoordinated=1 and SP2=coordphase2 and current< gmax[coordphase1]/"<<1+MaxGrnExtPortion+0.1 <<" ) ) then 1 else 0); \n"; 
 	FileMod<<"param PrioType { t in T}, >=0, default 0;  \n";
 	FileMod<<"param PrioWeigth { t in T}, >=0, default 0;  \n";
 	FileMod<<"param priorityType{j in J}, >=0, default 0;  \n";
 	FileMod<<"param priorityTypeWeigth{j in J, t in T}, := (if (priorityType[j]=t) then PrioWeigth[t] else 0);  \n";
-    FileMod<<"param Arr{p in P, i in I}, >=0,  default 0;  \n";
-    FileMod<<"param active_arr{p in P, i in I}, integer, :=(if Arr[p,i]>0 then 1 else 0); \n";
-    FileMod<<"param SumOfActiveArr, := (if (sum{p in P, i in I} Arr[p,i])>0 then (sum{p in P, i in I} Arr[p,i]) else 1); \n";
-    FileMod<<"  \n";
-    FileMod<<"param active_pj{p in P, j in J}, integer, :=(  if Rl[p,j]>0 then	1  else	0);  \n";
-    FileMod<<"param coef{p in P,k in K}, integer,:=(   if ((((p<SP1 and p<5) or (p<SP2 and p>4 )) and k==1))then   	0   else   	1);  \n";
-    FileMod<<"param MinGrn1{p in P,k in K},:=(  if (((p==SP1 and p<5) and k==1))then   	Grn1   else   	0);  \n";
-    FileMod<<"param MinGrn2{p in P,k in K},:=(  if (((p==SP2 and p>4 ) and k==1))then   	Grn2   else   	0);  \n";
-    FileMod<<"param ReqNo:=sum{p in P,j in J} active_pj[p,j];  \n";
-    FileMod<<"param queue_pj{p in P, j in J}, integer, :=(  if Tq[p,j]>0 then	1  else	0);  \n";
+    if (codeUsage==2) // If arrival table is considered ( in Integrated Priority and Adaptive Control)
+	{
+		FileMod<<"param s ,>=0,default 0;\n"; 
+		FileMod<<"param qSp ,>=0,default 0;\n"; 
+		FileMod<<"param Ar{i in I}, >=0,  default 0;\n";
+		FileMod<<"param Tq{i in I}, >=0,  default 0;\n";
+		FileMod<<"param active_arr{i in I}, integer, :=(if Ar[i]>0 then 1 else 0);\n";
+		FileMod<<"param SumOfActiveArr, := (if (sum{i in I} Ar[i])>0 then (sum{i in I} Ar[i]) else 1);\n";
+		FileMod<<"param Ve{i in I}, >=0,  default 0;\n";
+		FileMod<<"param Ln{i in I}, >=0,  default 0;\n";
+		FileMod<<"param Ph{i in I}, >=0,  default 0;\n";
+		FileMod<<"param L0{l in L}, >=0,  default 0;\n";  
+		FileMod<<"param LaPhSt{l in L}, integer;\n"; 
+		FileMod<<"param Ratio{i in I}, >=0,  default 0;\n";
+		FileMod<<"param indic{i in I},:= (if (Ratio[i]-L0[Ln[i]]/(s-qSp))> 0 then 1 else 0);\n";
+		FileMod<<"  \n";
+	}
+	FileMod<<"param active_pj{p in P, j in J}, integer, :=(if Rl[p,j]>0 then 1 else	0);\n";
+    FileMod<<"param active_coord{p in P, c in C}, integer, :=(if Cl[p,c]>0 then	1 else	0);\n";
+    FileMod<<"param coef{p in P,k in K}, integer,:=(if ((((p<SP1 and p<5) or (p<SP2 and p>4 )) and k==1))then 0 else 1);\n";
+    FileMod<<"param MinGrn1{p in P,k in K},:=(if (((p==SP1 and p<5) and k==1))then Grn1 else 0);\n";
+    FileMod<<"param MinGrn2{p in P,k in K},:=(if (((p==SP2 and p>4 ) and k==1))then	Grn2 else 0);\n";
+    FileMod<<"param ReqNo:=sum{p in P,j in J} active_pj[p,j] + isItCoordinated*sum{p in P,c in C} active_coord[p,c];  \n";
+   // FileMod<<"param queue_pj{p in P, j in J}, integer, :=(  if Tq[p,j]>0 then	1  else	0);  \n";
     FileMod<<"  \n";
     FileMod<<"var t{p in P,k in K}, >=0;    # starting time vector  \n";
     FileMod<<"var g{p in P,k in K}, >=0;  \n";
     FileMod<<"var v{p in P,k in K}, >=0;  \n";
     FileMod<<"var d{p in P,j in J}, >=0;  \n";
     FileMod<<"var theta{p in P,j in J}, binary;  \n";
-    FileMod<<"var PriorityDelay,>=0;  \n";
+	FileMod<<"var ttheta{p in P,j in J}, >=0; \n";
+	FileMod<<"var PriorityDelay,>=0;  \n";
     FileMod<<" \n";
-    FileMod<<"var miu{p in P,i in I}, binary; \n";
-	FileMod<<"var rd{p in P,i in I}, >=0; \n";
-    FileMod<<"var tmiu{p in P, i in I}, >=0; \n";
-    FileMod<<"var TotRegVehDel, >=0; \n";
-    FileMod<<"var QueClrTime{p in P, i in I},>=0; \n";
-    FileMod<<"var ttheta{p in P,j in J}, >=0; \n";
+    if (codeUsage==2) // If arrival table is considered ( in Integrated Priority and Adaptive Control)
+	{
+		FileMod<<"var miu{i in I}, binary; \n";
+		FileMod<<"var rd{i in I}, >=0; \n";
+		FileMod<<"var q{i in I}, >=0; \n";
+		FileMod<<"var qq{i in I}; \n";
+		FileMod<<"var qIndic{i in I}, binary; \n";
+		FileMod<<"var qmiu{i in I}, >=0; \n";
+		FileMod<<"var tmiu{ i in I}, >=0; \n";
+		FileMod<<"var gmiu{ i in I}, >=0; \n";
+		FileMod<<"var del{i in I}, binary; \n";
+		FileMod<<"var TotRegVehDel, >=0; \n";
+		FileMod<<"var delT1{i in I}, >=0; \n";
+		FileMod<<"var delT2{i in I}, >=0; \n";
+		FileMod<<"var ze{i in I}, binary; \n";
+		FileMod<<"var delZe{i in I}, binary; \n";
+		FileMod<<"var delZeT1{i in I}, >=0; \n";
+		FileMod<<"var delZeT2{i in I}, >=0; \n";
+		
+		//FileMod<<"var dif1{i in I}, >=0; \n";
+		//FileMod<<"var dif2{i in I}, >=0; \n";
+		//FileMod<<"var dif3{i in I}, >=0; \n";
+		//FileMod<<"var dif1Bina{i in I}, binary; \n";
+		//FileMod<<"var dif2Bina{i in I}, binary; \n";
+		//FileMod<<"var dif3Bina{i in I}, binary; \n";
+	}
+	
+	//FileMod<<"var ttheta{p in P,j in J}, >=0; \n";
     //FileMod<<"var dc1, >=0;\n";
     //FileMod<<"var dc2, >=0;\n";
+     FileMod<<"var zeta1, binary;\n";
+	 FileMod<<"var zetatl , >=0;\n";
+	 FileMod<<"var zeta2, binary;\n";
+	 FileMod<<"var zetatu , >=0;\n";
+
+	 FileMod<<"var gamma1, binary;\n";
+	 FileMod<<"var gammatl , >=0;\n";
+	 FileMod<<"var gamma2, binary;\n";
+	 FileMod<<"var gammatu , >=0;\n";
+
+	 FileMod<<"var coord1delay , >=0;\n";
+	 FileMod<<"var coord2delay , >=0;\n";
+
     
     FileMod<<"  \n";
-    FileMod<<"#================ Begin of cycle 1======================#  \n";
+   //"#================ Begin of cycle 1======================#  \n";
     FileMod<<"s.t. initial{p in P:(p<SP1) or (p<SP2 and p>4)}: t[p,1]=0;  \n";
     FileMod<<"s.t. initial1{p in P:p=SP1}: t[p,1]=init1;  \n";
     FileMod<<"s.t. initial2{p in P:p=SP2}: t[p,1]=init2;  \n";
-    FileMod<<"\n # constraints in the same cycle in same P??  \n";
+    //FileMod<<"\n # constraints in the same cycle in same P??  \n";
     FileMod<<"s.t. Prec_11_11_c1{p in P11: (p+1)in P11 and p>=SP1  }:  t[p+1,1]=t[p,1]+v[p,1];  \n";
     FileMod<<"s.t. Prec_12_12_c1{p in P12: (p+1)in P12 and p>=SP1  }:  t[p+1,1]=t[p,1]+v[p,1];  \n";
     FileMod<<"s.t. Prec_21_21_c1{p in P21: (p+1)in P21 and p>=SP2  }:  t[p+1,1]=t[p,1]+v[p,1];  \n";
     FileMod<<"s.t. Prec_22_22_c1{p in P22: (p+1)in P22 and p>=SP2  }:  t[p+1,1]=t[p,1]+v[p,1];  \n";
     FileMod<<"  \n";
-    FileMod<<"# constraints in the same cycle in connecting   \n";
+    //FileMod<<"# constraints in the same cycle in connecting   \n";
     FileMod<<"s.t. Prec_11_12_c1{p in P12: (card(P12)+p)<=5 and p>SP1  }:  t[p,1]=t[2,1]+v[2,1];  \n";
     FileMod<<"s.t. Prec_11_22_c1{p in P22: (card(P22)+p)<=9 and p>SP2  }:  t[p,1]=t[2,1]+v[2,1];  \n";
     FileMod<<"s.t. Prec_21_12_c1{p in P12: (card(P12)+p)<=5 and p>SP1  }:  t[p,1]=t[6,1]+v[6,1];  \n";
     FileMod<<"s.t. Prec_21_22_c1{p in P22: (card(P22)+p)<=9 and p>SP2  }:  t[p,1]=t[6,1]+v[6,1];  \n";
     FileMod<<"  \n";
-    FileMod<<"#================ END of cycle 1======================#  \n";
+    //FileMod<<"#================ END of cycle 1======================#  \n";
     FileMod<<"  \n";
-    FileMod<<"# constraints in the same cycle in same P??  \n";
+    //FileMod<<"# constraints in the same cycle in same P??  \n";
     FileMod<<"s.t. Prec_11_11_c23{p in P11, k in K: (p+1)in P11 and k>1  }:  t[p+1,k]=t[p,k]+v[p,k];  \n";
     FileMod<<"s.t. Prec_12_12_c23{p in P12, k in K: (p+1)in P12 and k>1  }:  t[p+1,k]=t[p,k]+v[p,k];  \n";
     FileMod<<"s.t. Prec_21_21_c23{p in P21, k in K: (p+1)in P21 and k>1  }:  t[p+1,k]=t[p,k]+v[p,k];  \n";
     FileMod<<"s.t. Prec_22_22_c23{p in P22, k in K: (p+1)in P22 and k>1  }:  t[p+1,k]=t[p,k]+v[p,k];  \n";
     FileMod<<"  \n";
-    FileMod<<"# constraints in the same cycle in connecting   \n";
+    //FileMod<<"# constraints in the same cycle in connecting   \n";
     FileMod<<"s.t. Prec_11_12_c23{p in P12, k in K: (card(P12)+p)=5 and k>1 }:  t[p,k]=t[2,k]+v[2,k];\n";
     FileMod<<"s.t. Prec_11_22_c23{p in P22, k in K: (card(P22)+p)=9 and k>1 }:  t[p,k]=t[2,k]+v[2,k];  \n";
     FileMod<<"s.t. Prec_21_12_c23{p in P12, k in K: (card(P12)+p)=5 and k>1 }:  t[p,k]=t[6,k]+v[6,k];  \n";
     FileMod<<"s.t. Prec_21_22_c23{p in P22, k in K: (card(P22)+p)=9 and k>1 }:  t[p,k]=t[6,k]+v[6,k];  \n";
     FileMod<<"  \n";
-    FileMod<<"# constraints in connecting in different cycles  \n";
+    //FileMod<<"# constraints in connecting in different cycles  \n";
     FileMod<<"s.t. Prec_12_11_c23{p in P11, k in K: (card(P11)+p+1)=4 and k>1 }:    t[p,k]=t[4,k-1]+v[4,k-1];  \n";
     FileMod<<"s.t. Prec_22_11_c23{p in P11, k in K: (card(P11)+p+1+4)=8 and k>1 }:  t[p,k]=t[8,k-1]+v[8,k-1];  \n";
     FileMod<<"s.t. Prec_12_21_c23{p in P21, k in K: (card(P21)+p+1-4)=4 and k>1 }:  t[p,k]=t[4,k-1]+v[4,k-1];  \n";
     FileMod<<"s.t. Prec_22_21_c23{p in P21, k in K: (card(P21)+p+1)=8 and k>1 }:    t[p,k]=t[8,k-1]+v[8,k-1];  \n";
     FileMod<<"  \n";
-    FileMod<<"#==================================================#  \n";
+    //FileMod<<"#==================================================#  \n";
     FileMod<<"  \n";
-    FileMod<<" s.t. RD: PriorityDelay=( sum{p in P,j in J, tt in T} (priorityTypeWeigth[j,tt]*active_pj[p,j]*d[p,j] ) );  \n";  
+    FileMod<<"s.t. RD: PriorityDelay=( sum{p in P,j in J, tt in T} (priorityTypeWeigth[j,tt]*active_pj[p,j]*d[p,j] ) )  + PrioWeigth[6]*(coord1delay + coord2delay)/2 ;  \n";  
     FileMod<<"  \n";
-    FileMod<<" s.t. TotRegVehDelay: TotRegVehDel=(sum{p in P, i in I} active_arr[p,i]*Arr[p,i]*rd[p,i])/SumOfActiveArr;  \n";
+    if (dCoordinationWeight>0)
+    {
+		FileMod<<"s.t. c0: coord1delay=isItCoordinated*((coef[coordphase1,1]-afterSplit)*(( zetatl - Cl[coordphase1,1]*zeta1 ) + (-zetatu + Cu[coordphase1,1]*zeta2)) +(1-coef[coordphase1,1] +afterSplit)*(( zetatl - Cl[coordphase1,1]*zeta1 ) + (-zetatu + Cu[coordphase1,1]*zeta2)) ); \n";
+		FileMod<<"s.t. cc0: coord2delay=isItCoordinated*((coef[coordphase2,1]-afterSplit)*(( gammatl - Cl[coordphase2,2]*gamma1 ) + (-gammatu + Cu[coordphase2,2]*gamma2)) +(1-coef[coordphase2,1]+afterSplit)*(( gammatl - Cl[coordphase2,2]*gamma1 ) + (-gammatu + Cu[coordphase2,2]*gamma2)) ); \n";
+
+		FileMod<<"s.t. c1: M*zeta1>=isItCoordinated*(coef[coordphase1,1]-afterSplit)*( t[coordphase1,1]-Cl[coordphase1,1] ); \n";
+		FileMod<<"s.t. c2: isItCoordinated*(coef[coordphase1,1]-afterSplit)* ( Cl[coordphase1,1]-t[coordphase1,1]) <= M*(1-zeta1);\n"; 
+		FileMod<<"s.t. c3: isItCoordinated*(coef[coordphase1,1]-afterSplit)* ( t[coordphase1,1]-M*(1-zeta1) ) <= zetatl; \n";
+		FileMod<<"s.t. c4: isItCoordinated*(coef[coordphase1,1]-afterSplit)* zetatl <=( t[coordphase1,1]+M*(1-zeta1) ) ; \n";
+		FileMod<<"s.t. c5: isItCoordinated*(coef[coordphase1,1]-afterSplit)* zetatl <=M*zeta1; \n";
+
+		FileMod<<"s.t. c6: M*zeta2>=isItCoordinated*(coef[coordphase1,1]-afterSplit)*( Cu[coordphase1,1]-(g[coordphase1,1]+t[coordphase1,1]) ); \n";
+		FileMod<<"s.t. c7: isItCoordinated*(coef[coordphase1,1]-afterSplit)*( (g[coordphase1,1]+t[coordphase1,1])-Cu[coordphase1,1] )<= M*(1-zeta2); \n";
+		FileMod<<"s.t. c8: isItCoordinated*(coef[coordphase1,1]-afterSplit)*( (g[coordphase1,1]+t[coordphase1,1])-M*(1-zeta2) ) <= zetatu; \n";
+		FileMod<<"s.t. c9: isItCoordinated*(coef[coordphase1,1]-afterSplit)*zetatu <= ( (g[coordphase1,1]+t[coordphase1,1]) + M*(1-zeta2) ) ; \n";
+		FileMod<<"s.t. c10: isItCoordinated*(coef[coordphase1,1]-afterSplit)*zetatu<=M*zeta2; \n";
+
+		FileMod<<"s.t. c11: M*zeta1>=isItCoordinated*(1-coef[coordphase1,1]+afterSplit) * ( t[coordphase1,2]-Cl[coordphase1,1] ); \n";
+		FileMod<<"s.t. c12: isItCoordinated*(1-coef[coordphase1,1]+afterSplit) * ( Cl[coordphase1,1]-t[coordphase1,2]) <= M*(1-zeta1); \n";
+		FileMod<<"s.t. c13: isItCoordinated*(1-coef[coordphase1,1]+afterSplit) * ( t[coordphase1,2]-M*(1-zeta1) )<= zetatl; \n";
+		FileMod<<"s.t. c14: isItCoordinated*(1-coef[coordphase1,1]+afterSplit) *zetatl<= ( t[coordphase1,2]+M*(1-zeta1) ) ; \n";
+		FileMod<<"s.t. c15: isItCoordinated*(1-coef[coordphase1,1]+afterSplit) *zetatl<=M*zeta1; \n";
+
+		FileMod<<"s.t. c16: M*zeta2>=isItCoordinated*(1-coef[coordphase1,1]+afterSplit) * ( Cu[coordphase1,1]-(g[coordphase1,2]+t[coordphase1,2]) ); \n";
+		FileMod<<"s.t. c17: isItCoordinated*(1-coef[coordphase1,1]+afterSplit) * ( (g[coordphase1,2]+t[coordphase1,2])-Cu[coordphase1,1] )<= M*(1-zeta2); \n";
+		FileMod<<"s.t. c18: isItCoordinated*(1-coef[coordphase1,1]+afterSplit) * ( (g[coordphase1,2]+t[coordphase1,2])-M*(1-zeta2) ) <= zetatu; \n";
+		FileMod<<"s.t. c19: isItCoordinated*(1-coef[coordphase1,1+afterSplit]) *zetatu <=  ( (g[coordphase1,2]+t[coordphase1,2]) + M*(1-zeta2) ) ; \n";
+		FileMod<<"s.t. c20: isItCoordinated*(1-coef[coordphase1,1]+afterSplit) *zetatu<=M*zeta2; \n";
+
+		FileMod<<"s.t. cc1: M*gamma1>=isItCoordinated*(coef[coordphase2,1]-afterSplit)* ( t[coordphase2,1]-Cl[coordphase2,2] ); \n";
+		FileMod<<"s.t. cc2: isItCoordinated*(coef[coordphase2,1]-afterSplit)* ( Cl[coordphase2,2]-t[coordphase2,1] ) <= M*(1-gamma1); \n";
+		FileMod<<"s.t. cc3: isItCoordinated*(coef[coordphase2,1]-afterSplit)* ( t[coordphase2,1]-M*(1-gamma1) )<= gammatl; \n";
+		FileMod<<"s.t. cc4: isItCoordinated*(coef[coordphase2,1]-afterSplit)* gammatl<=( t[coordphase2,1]+M*(1-gamma1) ) ; \n";
+		FileMod<<"s.t. cc5: isItCoordinated*(coef[coordphase2,1]-afterSplit)* gammatl<=M*gamma1; \n";
+
+		FileMod<<"s.t. cc6: M*gamma2>=isItCoordinated*(coef[coordphase2,1]-afterSplit)* ( Cu[coordphase2,2]-(g[coordphase2,1]+t[coordphase2,1]) ); \n";
+		FileMod<<"s.t. cc7: isItCoordinated*(coef[coordphase2,1]-afterSplit)* ( (g[coordphase2,1]+t[coordphase2,1])-Cu[coordphase2,2])<= M*(1-gamma2); \n";
+		FileMod<<"s.t. cc8: isItCoordinated*(coef[coordphase2,1]-afterSplit)* ( (g[coordphase2,1]+t[coordphase2,1])-M*(1-gamma2) ) <= gammatu; \n";
+		FileMod<<"s.t. cc9: isItCoordinated*(coef[coordphase2,1]-afterSplit)* gammatu <= ( (g[coordphase2,1]+t[coordphase2,1]) + M*(1-gamma2) ) ; \n";
+		FileMod<<"s.t. cc10: isItCoordinated*(coef[coordphase2,1]-afterSplit)* gammatu<=M*gamma2; \n";
+
+		FileMod<<"s.t. cc11: M*gamma1>=isItCoordinated*(1-coef[coordphase2,1]+afterSplit) * ( t[coordphase2,2]-Cl[coordphase2,2] ); \n";
+		FileMod<<"s.t. cc12: isItCoordinated*(1-coef[coordphase2,1]+afterSplit) * ( Cl[coordphase2,2]-t[coordphase2,2] ) <= M*(1-gamma1); \n";
+		FileMod<<"s.t. cc13: isItCoordinated*(1-coef[coordphase2,1]+afterSplit) * ( t[coordphase2,2]-M*(1-gamma1) )<= gammatl; \n";
+		FileMod<<"s.t. cc14: isItCoordinated*(1-coef[coordphase2,1]+afterSplit)*gammatl<= ( t[coordphase2,2]+M*(1-gamma1) ) ; \n";
+		FileMod<<"s.t. cc15: isItCoordinated*(1-coef[coordphase2,1]+afterSplit)*gammatl <= M*gamma1; \n";
+
+		FileMod<<"s.t. cc16: M*gamma2>=isItCoordinated*(1-coef[coordphase2,1]+afterSplit) * ( Cu[coordphase2,2]-(g[coordphase2,2]+t[coordphase2,2]) ); \n";
+		FileMod<<"s.t. cc17: isItCoordinated*(1-coef[coordphase2,1]+afterSplit) * ( (g[coordphase2,2]+t[coordphase2,2])-Cu[coordphase2,2])<= M*(1-gamma2); \n";
+		FileMod<<"s.t. cc18: isItCoordinated*(1-coef[coordphase2,1]+afterSplit) * ( (g[coordphase2,2]+t[coordphase2,2])-M*(1-gamma2) ) <= gammatu; \n";
+		FileMod<<"s.t. cc19: isItCoordinated*(1-coef[coordphase2,1]+afterSplit)*gammatu <=  ( (g[coordphase2,2]+t[coordphase2,2]) + M*(1-gamma2) ) ; \n";
+		FileMod<<"s.t. cc20: isItCoordinated*(1-coef[coordphase2,1]+afterSplit)*gammatu <= M*gamma2; \n";
+	}
+    if (codeUsage==2)
+		FileMod<<"s.t. TotRegVehDelay: TotRegVehDel=(sum{i in I} active_arr[i]*rd[i])/SumOfActiveArr;  \n";
     FileMod<<"  \n";
     FileMod<<"s.t. PhaseLen{p in P, k in K}:  v[p,k]=(g[p,k]+y[p]+red[p])*coef[p,k];  \n";
     FileMod<<"  \n";
     FileMod<<"s.t. PhaseLen2{p in P, k in K}:  v[p,k]*coef[p,k]>=g[p,k]; \n";
     FileMod<<"  \n";
-    FileMod<<"s.t. GrnMax{p in P : (p!= coordphase1 and p!=coordphase2)}:  g[p,1]<=gmax[p];    \n";
-    FileMod<<"  \n";
-    FileMod<<"  s.t. GrnMax2{p in P}:  (1-isItCoordinated)*g[p,2]<=gmax[p];   \n";    //  !!!!!!!!!!!!!!!!!!!!!! FileMod<<"  s.t. GrnMax2{p in P}:  g[p,2]<=gmax[p];   \n";
-    FileMod<<"  \n";
-    FileMod<<"  s.t. GrnMax3{p in P}:  (1-isItCoordinated)*g[p,1]<=gmax[p];  \n";
-    FileMod<<"  \n";
-	FileMod<<"  s.t. GrnMin{p in P,k in K}:  g[p,k]>=(gmin[p]-MinGrn1[p,k]-MinGrn2[p,k])*coef[p,k];  \n";
-	FileMod<<"  \n";
-	//FileMod<<"  s.t. GrnMin2{p in P:(p=coordphase1 and isCurPhCoord1=1)} :g[p,1]>=isItCoordinated*( split-current ); \n";
-	//FileMod<<"  \n";
-	//FileMod<<"  s.t. GrnMin3{p in P:(p=coordphase2 and isCurPhCoord2=1)} :g[p,1]>=isItCoordinated*( split-current ); \n";
-	//FileMod<<"  \n";
-	//FileMod<<"  s.t. CoordPhasMax1{p in P: p=coordphase1}: isItCoordinated*(1-earlyReturnPhase1)*g[p,1]<=gmax[p]; \n";
-	//FileMod<<"  \n";
-	//FileMod<<"  s.t. CoordPhasMax2{p in P: p=coordphase2}: isItCoordinated*(1-earlyReturnPhase2)*g[p,1]<=gmax[p]; \n";
-	//FileMod<<"  \n";
-	//FileMod<<"s.t. CoordDelay1{p in P: p=coordphase1}: dc1>=isItCoordinated*((cycle-current+split) - (t[p,2]+v[p,2]) ); \n";
-	//FileMod<<"  \n";
-	//FileMod<<"s.t. CoordDelay2{p in P: p=coordphase2}: dc2>=isItCoordinated*((cycle-current+split) - (t[p,2]+v[p,2]) ); \n";
-	//FileMod<<"  \n";
-	//FileMod<<"s.t. CoordDelay5{p in P: ((p in P21)and current>gmax[coordphase1] and coordphase1>0)}: dc2>= isItCoordinated*((cycle-current+split) - (t[coordphase2,1]+v[coordphase2,1]));   # I assumed the coordinated phase of ring 2 is in the second brrier \n";
-	//FileMod<<"  \n";
-	//FileMod<<"s.t. CoordDelay6{p in P: ((p in P21)and current>gmax[coordphase2] and coordphase1>0)}: dc2>= isItCoordinated*((cycle-current+split) - (t[coordphase2,1]+v[coordphase2,1]));   # I assumed the coordinated phase of ring 2 is in the second brrier \n";
-	//FileMod<<"  \n";
-	FileMod<<"  \n";
-	FileMod<<"	s.t. PrioDelay1{p in P,j in J: active_pj[p,j]>0 }:    d[p,j]>=t[p,1]-Rl[p,j];  \n";
-	FileMod<<"  \n";
-	FileMod<<" s.t. PrioDelay2{p in P,j in J: active_pj[p,j]>0 }:    M*theta[p,j]>=Ru[p,j]-(t[p,1]+g[p,1]); \n";
-	FileMod<<"  \n";
-	FileMod<<" s.t. PrioDelay3{p in P,j in J: active_pj[p,j]>0 }:    d[p,j]>= ttheta[p,j]-Rl[p,j]*theta[p,j]; \n";
-	FileMod<<"  \n";
-	FileMod<<" s.t. PrioDelay4{p in P,j in J: active_pj[p,j]>0 }:    g[p,1]>= (Ru[p,j]-Rl[p,j])*(1-theta[p,j]); \n";
-	FileMod<<"  \n";
-	FileMod<<" s.t. PrioDelay5{p in P, j in J: active_pj[p,j]>0}:    ttheta[p,j]<=M*theta[p,j]; \n";
-	FileMod<<"  \n";
-	FileMod<<" s.t. PrioDelay6{p in P, j in J: active_pj[p,j]>0}:    t[p,2]-M*(1-theta[p,j])<=ttheta[p,j]; \n";
-	FileMod<<"  \n";
-	FileMod<<" s.t. PrioDelay7{p in P, j in J: active_pj[p,j]>0}:    t[p,2]+M*(1-theta[p,j])>=ttheta[p,j]; \n";
-	FileMod<<"  \n";
-	FileMod<<" s.t. PrioDelay8{p in P, j in J: active_pj[p,j]>0}:   g[p,2]>=(Ru[p,j]-Rl[p,j])*theta[p,j]; \n ";
-	FileMod<<"  \n";
+    FileMod<<"s.t. GrnMax{p in P ,k in K:  ( (p!= coordphase1 and p!=coordphase2 and isItCoordinated=1)		 or isItCoordinated=0 ) }:  g[p,k]<=(gmax[p]-MinGrn1[p,k]-MinGrn2[p,k])*coef[p,k];    \n";
+    FileMod<<"s.t. GrnMax2:  (1-earlyReturn)*g[2,1]<=(1-earlyReturn)*(gmax[2]-((inSplit+afterSplit)*(current)+(1-afterSplit-inSplit)*(MinGrn1[2,1]+MinGrn2[2,1])));   \n";
+    FileMod<<"s.t. GrnMax3:  (1-earlyReturn)*g[6,1]<=(1-earlyReturn)*(gmax[6]-((inSplit+afterSplit)*(current)+(1-afterSplit-inSplit)*(MinGrn1[6,1]+MinGrn2[6,1])));   \n";
+    FileMod<<"s.t. GrnMax4{p in P: (p=coordphase1 or p=coordphase2)}:  g[p,2]<=gmax[p];   \n";
+    FileMod<<"s.t. GrnMin{p in P,k in K}:  g[p,k]>=(gmin[p]-MinGrn1[p,k]-MinGrn2[p,k])*coef[p,k];   \n";
+  
+  	FileMod<<"  \n";
+	FileMod<<"s.t. PrioDelay1{p in P,j in J: active_pj[p,j]>0 }:    d[p,j]>=t[p,1]-Rl[p,j];  \n";
+	FileMod<<"s.t. PrioDelay2{p in P,j in J: active_pj[p,j]>0 }:    M*theta[p,j]>=Ru[p,j]-(t[p,1]+g[p,1]); \n";
+	FileMod<<"s.t. PrioDelay3{p in P,j in J: active_pj[p,j]>0 }:    d[p,j]>= ttheta[p,j]-Rl[p,j]*theta[p,j]; \n";
+	FileMod<<"s.t. PrioDelay4{p in P,j in J: active_pj[p,j]>0 }:    g[p,1]>= (Ru[p,j]-Rl[p,j])*(1-theta[p,j]); \n";
+	FileMod<<"s.t. PrioDelay5{p in P, j in J: active_pj[p,j]>0}:    ttheta[p,j]<=M*theta[p,j]; \n";
+	FileMod<<"s.t. PrioDelay6{p in P, j in J: active_pj[p,j]>0}:    t[p,2]-M*(1-theta[p,j])<=ttheta[p,j]; \n";
+	FileMod<<"s.t. PrioDelay7{p in P, j in J: active_pj[p,j]>0}:    t[p,2]+M*(1-theta[p,j])>=ttheta[p,j]; \n";
+	FileMod<<"s.t. PrioDelay8{p in P, j in J: active_pj[p,j]>0}:   g[p,2]>=(Ru[p,j]-Rl[p,j])*theta[p,j]; \n ";
 	FileMod<<"s.t. PrioDelay9 {p in P, j in J: active_pj[p,j]>0}:   Ru[p,j]*theta[p,j] <= ( t[p,2]+g[p,2]) ; \n ";
 	FileMod<<"  \n";
-	//FileMod<<"  s.t. RegVehDel1{p in P, i in I: active_arr[p,i]>0}: rd[p,i] >= t[p,1]-i; \n";
-	//FileMod<<"  \n";
-	//FileMod<<"s.t. RegVehDel2{p in P, i in I: active_arr[p,i]>0} : M*miu[p,i] >= i-(t[p,1]+g[p,1]); \n";
-	//FileMod<<"  \n";
-	//FileMod<<"s.t. RegVehDel3{p in P, i in I: active_arr[p,i]>0} : rd[p,i] >=  tmiu[p,i]-i*miu[p,i]; \n";
-	//FileMod<<"  \n";
-	//FileMod<<"s.t. RegVehDel4{p in P, i in I: active_arr[p,i]>0} : tmiu[p,i]<=M*miu[p,i]; \n";
-	//FileMod<<"  \n";
-	//FileMod<<"s.t. RegVehDel5{p in P, i in I: active_arr[p,i]>0} : t[p,2]-M*(1-miu[p,i])<=tmiu[p,i]; \n";
-	//FileMod<<"  \n";
-	//FileMod<<"s.t. RegVehDel6{p in P, i in I: active_arr[p,i]>0} : t[p,2]+M*(1-miu[p,i])>=tmiu[p,i]; \n";
-	//FileMod<<"  \n";
-	
- 
-	if(HaveEVInList==1)
+	if (codeUsage==2)
 	{
-		// WITH EV case: the minimum green time, a[p,k] should be 0
-		FileMod<<"minimize delay: PriorityDelay  ;\n";
-	}
-	else
-	{
-		// WITHOUT EV case: the Maximum green time, a[p,k] should be as large as possible.
-		FileMod<<"  minimize delay:  TotRegVehDel+  PriorityDelay;     \n";
-	}
+		//FileMod<<"s.t. RVehD1{i in I: (active_arr[i]>0)}:				   			  rd[i] >= t[Ph[i],1]     +q[i]/s-(dif1[i])/Ve[i]+Tq[i];  \n ";
+		//FileMod<<"s.t. RVehD2{i in I: (active_arr[i]>0)}: 							  M*miu[i] >= q[i]/s + Ar[i]/Ve[i] -(g[Ph[i],1]);  \n ";
+		//FileMod<<"s.t. RVehD3{i in I: (active_arr[i]>0 )}: 					          rd[i] >= tmiu[i]    + (dif2[i])/s - (dif3[i])/Ve[i] + Tq[i]; \n ";
 
+		FileMod<<"s.t. RVehD1{i in I: (active_arr[i]>0)}: rd[i] >= t[Ph[i],1]+q[i]/s-(Ar[i]-q[i])/Ve[i]+Tq[i];  \n ";
+		FileMod<<"s.t. RVehD2{i in I: (active_arr[i]>0)} : M*miu[i] >= q[i]/s + Ar[i]/Ve[i] -g[Ph[i],1];  \n ";
+		FileMod<<"s.t. RVehD3{i in I: (active_arr[i]>0 )} : rd[i] >= tmiu[i] + qmiu[i]/s - gmiu[i] - Ar[i]*miu[i]/Ve[i] + qmiu[i]/Ve[i] + Tq[i]; \n ";
+		//FileMod<<"s.t. RVehD4{p in P,i in I: (active_arr[i]>0 and p=Ph[i])} : M*(1-miu[i]) >= t[p,2]+g[p,2]-((q[i]-s*g[p,1])/s +Ar[i]/Ve[i]); \n ";
+		FileMod<<"s.t. RVehD5{i in I,ii in I: (active_arr[i]>0 and active_arr[ii]>0  and Ln[i]=Ln[ii] and Ar[i]<Ar[ii])} : miu[i] <= miu[ii] ; \n ";
+		
+		FileMod<<"s.t. RVehD6{i in I: (active_arr[i]>0)}: tmiu[i]<=M*miu[i];   \n ";
+		FileMod<<"s.t. RVehD7{p in P,i in I: (active_arr[i]>0 and p=Ph[i])}: t[p,2]-M*(1-miu[i])<=tmiu[i];   \n ";
+		FileMod<<"s.t. RVehD8{p in P,i in I: (active_arr[i]>0 and p=Ph[i])}: t[p,2]+M*(1-miu[i])>=tmiu[i]; \n ";
+		
+		FileMod<<"s.t. RVehD9{i in I: active_arr[i]>0 }: gmiu[i]<=M*miu[i];   \n ";
+		FileMod<<"s.t. RVehD10{p in P,i in I: (active_arr[i]>0 and p=Ph[i])}: g[p,1]-M*(1-miu[i])<=gmiu[i];   \n ";
+		FileMod<<"s.t. RVehD11{p in P,i in I: (active_arr[i]>0 and p=Ph[i])}: g[p,1]+M*(1-miu[i])>=gmiu[i]; \n ";
+		
+		FileMod<<"s.t. RVehD12{i in I: (active_arr[i]>0)}: qmiu[i]<=M*miu[i];   \n ";
+		FileMod<<"s.t. RVehD13{i in I: (active_arr[i]>0)}: q[i]-M*(1-miu[i])<=qmiu[i];   \n ";
+		FileMod<<"s.t. RVehD14{i in I: (active_arr[i]>0)}: q[i]+M*(1-miu[i])>=qmiu[i]; \n ";
+		
+		FileMod<<"s.t. RVehD15{i in I,k in K: (active_arr[i]>0)}: qq[i]=((LaPhSt[Ln[i]])*(L0[Ln[i]]+Ratio[i]*qSp-g[Ph[i],1]*s)*indic[i])+((1-LaPhSt[Ln[i]])*(L0[Ln[i]]*del[i]+Ratio[i]*qSp*del[i]-s*Ratio[i]*del[i]+s*((1-coef[Ph[i],1])*delT2[i]+coef[Ph[i],1]*delT1[i])-s*Ratio[i]*delZe[i]-s*((1-coef[Ph[i],1])*delZeT2[i]+coef[Ph[i],1]*delZeT1[i]))); \n ";
+				
+		 FileMod<<"s.t. RVehD16{i in I: (active_arr[i]>0)}: coef[Ph[i],1]*(t[Ph[i],1]-M*(1-del[i]))<=coef[Ph[i],1]*delT1[i];  \n ";
+		 FileMod<<"s.t. RVehD17{i in I: (active_arr[i]>0)}: coef[Ph[i],1]*(t[Ph[i],1]+M*(1-del[i]))>=coef[Ph[i],1]*delT1[i]; \n ";
+		 FileMod<<"s.t. RVehD18{i in I: (active_arr[i]>0)}: coef[Ph[i],1]*delT1[i]<=M*del[i]; \n ";
+		 
+		 FileMod<<"s.t. RVehD19{i in I: (active_arr[i]>0)}: (1-coef[Ph[i],1])*t[Ph[i],2]-M*(1-del[i])<=(1-coef[Ph[i],1])*delT2[i];  \n ";
+		 FileMod<<"s.t. RVehD20{i in I: (active_arr[i]>0)}: (1-coef[Ph[i],1])*t[Ph[i],2]+M*(1-del[i])>=(1-coef[Ph[i],1])*delT2[i];  \n ";
+		 FileMod<<"s.t. RVehD21{i in I: (active_arr[i]>0)}: (1-coef[Ph[i],1])*delT2[i]<=M*del[i];  \n ";
+		 
+		 FileMod<<" s.t. RVehD22{i in I: (active_arr[i]>0)}: coef[Ph[i],1]*(t[Ph[i],1]-M*(1-delZe[i]))<=delZeT1[i];  \n ";
+		 FileMod<<"s.t. RVehD23{i in I: (active_arr[i]>0)}: t[Ph[i],1]+M*(1-delZe[i])>=coef[Ph[i],1]*delZeT1[i];  \n ";
+		 FileMod<<"s.t. RVehD24{i in I: (active_arr[i]>0)}: coef[Ph[i],1]*delZeT1[i]<=M*delZe[i];  \n ";
+		 
+		 FileMod<<"s.t. RVehD25{i in I: (active_arr[i]>0)}: (1-coef[Ph[i],1])*(t[Ph[i],2]-M*(1-delZe[i]))<=delZeT2[i];  \n ";
+		 FileMod<<"s.t. RVehD26{i in I: (active_arr[i]>0)}: t[Ph[i],2]+M*(1-delZe[i])>=(1-coef[Ph[i],1])*delZeT2[i];  \n ";
+		 FileMod<<"s.t. RVehD27{i in I: (active_arr[i]>0)}: (1-coef[Ph[i],1])*delZeT2[i]<=M*delZe[i];  \n ";
+		 
+		 FileMod<<"s.t. RVehD28{i in I: (active_arr[i]>0)}: delZe[i]<=del[i];  \n ";
+		 FileMod<<"s.t. RVehD29{i in I: (active_arr[i]>0)}: delZe[i]<=ze[i];  \n ";
+		 FileMod<<"s.t. RVehD30{i in I: (active_arr[i]>0)}: delZe[i]>=del[i]+ze[i]-1;  \n ";
+		 
+		 FileMod<<"s.t. RVehD31{i in I: (active_arr[i]>0)}: ((1-coef[Ph[i],1])*t[Ph[i],2] + coef[Ph[i],1]*t[Ph[i],1] - Ratio[i])<=M*ze[i];  \n ";
+		 FileMod<<"s.t. RVehD32{i in I: (active_arr[i]>0)}: ((1-coef[Ph[i],1])*t[Ph[i],2] + coef[Ph[i],1]*t[Ph[i],1] - Ratio[i])>=M*(ze[i]-1);  \n ";
+		 
+		 FileMod<<"s.t. RVehD33{i in I: (active_arr[i]>0)}: s*(((1-coef[Ph[i],1])*t[Ph[i],2] + coef[Ph[i],1]*t[Ph[i],1]) + L0[Ln[i]])/(s-qSp)- Ratio[i]<=M*del[i];  \n ";
+		 FileMod<<"s.t. RVehD34{i in I: (active_arr[i]>0)}: s*(((1-coef[Ph[i],1])*t[Ph[i],2] + coef[Ph[i],1]*t[Ph[i],1]) + L0[Ln[i]])/(s-qSp)- Ratio[i]>=M*(del[i]-1);  \n ";
+		 
+		 FileMod<<"s.t. RVehD35{i in I: (active_arr[i]>0)}: qq[i]<=M*qIndic[i];  \n ";
+		 FileMod<<"s.t. RVehD36{i in I: (active_arr[i]>0)}: qq[i]>=M*(qIndic[i]-1);  \n ";
+		 
+		 FileMod<<"s.t. RVehD37{i in I: (active_arr[i]>0)}: qq[i]-M*(1-qIndic[i])<=q[i];  \n ";
+		 FileMod<<"s.t. RVehD38{i in I: (active_arr[i]>0)}: qq[i]+M*(1-qIndic[i])>=q[i];  \n ";
+		 FileMod<<"s.t. RVehD39{i in I: (active_arr[i]>0)}: q[i]<=M*qIndic[i];  \n ";
+		 
+		 //FileMod<<"s.t. RVehD40{i in I: (active_arr[i]>0)}: Ar[i]-q[i]<=M*dif1Bina[i];  \n ";
+		 //FileMod<<"s.t. RVehD41{i in I: (active_arr[i]>0)}: Ar[i]-q[i]>=M*(dif1Bina[i]-1);  \n ";
+		 
+		 //FileMod<<"s.t. RVehD42{i in I: (active_arr[i]>0)}: Ar[i]-q[i]-M*(1-dif1Bina[i])<=dif1[i];  \n ";
+		 //FileMod<<"s.t. RVehD43{i in I: (active_arr[i]>0)}: Ar[i]-q[i]+M*(1-dif1Bina[i])>=dif1[i];  \n ";
+		 //FileMod<<"s.t. RVehD44{i in I: (active_arr[i]>0)}: dif1[i]<=M*dif1Bina[i];  \n ";
+		 
+		 
+		 //FileMod<<"s.t. RVehD45{i in I: (active_arr[i]>0)}: (qmiu[i] - s*gmiu[i])<=M*dif2Bina[i];  \n ";
+		 //FileMod<<"s.t. RVehD46{i in I: (active_arr[i]>0)}: (qmiu[i] - s*gmiu[i])>=M*(dif2Bina[i]-1);  \n ";
+		 
+		 //FileMod<<"s.t. RVehD47{i in I: (active_arr[i]>0)}: (qmiu[i] - s*gmiu[i])-M*(1-dif2Bina[i])<=dif2[i];  \n ";
+		 //FileMod<<"s.t. RVehD48{i in I: (active_arr[i]>0)}: (qmiu[i] - s*gmiu[i])+M*(1-dif2Bina[i])>=dif2[i];  \n ";
+		 //FileMod<<"s.t. RVehD49{i in I: (active_arr[i]>0)}: dif2[i]<=M*dif2Bina[i];  \n ";
+
+		 //FileMod<<"s.t. RVehD50{i in I: (active_arr[i]>0)}: (Ar[i]*miu[i] - qmiu[i])<=M*dif3Bina[i];  \n ";
+		 //FileMod<<"s.t. RVehD51{i in I: (active_arr[i]>0)}: (Ar[i]*miu[i] - qmiu[i])>=M*(dif3Bina[i]-1);  \n ";
+		 
+		 //FileMod<<"s.t. RVehD52{i in I: (active_arr[i]>0)}: (Ar[i]*miu[i] - qmiu[i])-M*(1-dif3Bina[i])<=dif3[i];  \n ";
+		 //FileMod<<"s.t. RVehD53{i in I: (active_arr[i]>0)}: (Ar[i]*miu[i] - qmiu[i])+M*(1-dif3Bina[i])>=dif3[i];  \n ";
+		 //FileMod<<"s.t. RVehD54{i in I: (active_arr[i]>0)}: dif3[i]<=M*dif3Bina[i];   \n ";
+ 
+	}
+ 
+	if(codeUsage!=2) // in case we do not consider egular vehicles (no arrival table)
+		FileMod<<"minimize delay: PriorityDelay  ;\n";
+	else
+		FileMod<<"  minimize delay:  TotRegVehDel+  PriorityDelay;     \n";
+	
     FileMod<<"  \n";
     FileMod<<"solve;  \n";
     FileMod<<"  \n";
@@ -1057,7 +1443,11 @@ void GenerateMod(char *Filename,RSU_Config ConfigIS,char *OutFilename)
     FileMod<<" {  \n";
     FileMod<<"   printf \"%d  %5.2f  %5.2f  %5.2f %d \\n \", (p+ 10*(theta[p,j])), Rl[p,j],Ru[p,j], d[p,j] , priorityType[j] >>\"/nojournal/bin/Results.txt\";\n";
     FileMod<<" } \n";
-    FileMod<<"  \n";
+    if ( dCoordinationWeight >0)
+    {
+		FileMod<<"   printf \"%d  %5.2f  %5.2f  %5.2f %d \\n \", (2+ 10*(1-coef[2,1])), Cl[2,1],Cu[2,1], coord1delay , 6 >>\"/nojournal/bin/Results.txt\";\n";
+		FileMod<<"   printf \"%d  %5.2f  %5.2f  %5.2f %d \\n \", (6+ 10*(1-coef[6,1])), Cl[6,2],Cu[6,2], coord2delay , 6 >>\"/nojournal/bin/Results.txt\";\n";
+	}
     FileMod<<"printf \"%5.2f \\n \", PriorityDelay >>\"/nojournal/bin/Results.txt\"; \n";
     FileMod<<"printf \"%5.2f \\n \", TotRegVehDel >>\"/nojournal/bin/Results.txt\";  \n ";
     FileMod<<"printf \" \\n \">>\"/nojournal/bin/Results.txt\";\n";
@@ -1068,6 +1458,124 @@ void GenerateMod(char *Filename,RSU_Config ConfigIS,char *OutFilename)
 
 
 
+void UnpackTrajData1(char* ablob)
+{
+	int No_Veh;
+
+	int offset;
+	offset=0;
+	long    tempLong;
+	unsigned char   byteA;  // force to unsigned this time,
+	unsigned char   byteB;  // we do not want a bunch of sign extension 
+	unsigned char   byteC;  // math mucking up our combine logic
+	unsigned char   byteD;
+	
+	//Header
+	byteA = ablob[offset+0];
+	byteB = ablob[offset+1];
+	int temp = (int)(((byteA << 8) + (byteB))); // in fact unsigned
+	offset = offset + 2;
+	
+	//cout<<temp<<endl;
+	
+	//id
+	temp = (char)ablob[offset];
+	offset = offset + 1; // move past to next item
+	//cout<<temp<<endl;
+	
+	
+	//Do vehicle number
+	byteA = ablob[offset+0];
+	byteB = ablob[offset+1];
+	No_Veh = (int)(((byteA << 8) + (byteB))); // in fact unsigned
+	offset = offset + 2;
+	
+	//cout<<No_Veh<<endl;
+	
+	//Do each vehicle
+	for(int i=0;i<No_Veh;i++)
+	{
+		ConnectedVehicle TempVeh;
+		//Do Veh ID
+		byteA = ablob[offset+0];
+		byteB = ablob[offset+1];
+		TempVeh.TempID = (int)(((byteA << 8) + (byteB))); // in fact unsigned
+		offset = offset + 2;
+
+		//do speed
+		byteA = ablob[offset+0];
+		byteB = ablob[offset+1];
+		byteC = ablob[offset+2];
+		byteD = ablob[offset+3];
+		tempLong = (unsigned long)((byteA << 24) + (byteB << 16) + (byteC << 8) + (byteD));
+		TempVeh.Speed = (tempLong /  DEG2ASNunits); // convert and store as float
+		offset = offset + 4;
+		
+		//do distance to stop bar
+		byteA = ablob[offset+0];
+		byteB = ablob[offset+1];
+		byteC = ablob[offset+2];
+		byteD = ablob[offset+3];
+		tempLong = (unsigned long)((byteA << 24) + (byteB << 16) + (byteC << 8) + (byteD));
+		TempVeh.stopBarDistance = (tempLong /  DEG2ASNunits); // convert and store as float
+		offset = offset + 4;
+		
+		//do acceleration
+		byteA = ablob[offset+0];
+		byteB = ablob[offset+1];
+		byteC = ablob[offset+2];
+		byteD = ablob[offset+3];
+		tempLong = (unsigned long)((byteA << 24) + (byteB << 16) + (byteC << 8) + (byteD));
+		TempVeh.acceleration = (tempLong /  DEG2ASNunits); // convert and store as float
+		offset = offset + 4;
+		
+		//do approach
+		TempVeh.approach = (char)ablob[offset];
+	    offset = offset + 1; // move past to next item
+		
+		//do lane
+		TempVeh.lane = (char)ablob[offset];
+	    offset = offset + 1; // move past to next item
+		
+		//do req_phase
+		TempVeh.req_phase = (char)ablob[offset];
+	    offset = offset + 1; // move past to next item
+		
+		//do stop time
+		byteA = ablob[offset+0];
+		byteB = ablob[offset+1];
+		byteC = ablob[offset+2];
+		byteD = ablob[offset+3];
+		tempLong = (unsigned long)((byteA << 24) + (byteB << 16) + (byteC << 8) + (byteD));
+		TempVeh.time_stop = (tempLong); // convert and store as float
+		offset = offset + 4;
+		
+		//cout<<"E_Offset["<<j<<"] is:"<<TempVeh.E_Offset[j]<<endl;
+		//cout<<"Done with one vehicle"<<endl;
+		
+		//Here reflects the penetration rate!!!!!!!!!!!!!!!!!!!!!!!!!!! Add only half of the vehicles
+	//	if (penetration>0.99)  //%100 penetration rate
+	//	{
+		trackedveh.InsertRear(TempVeh); 
+	//	}
+	//	if (penetration>0.74 && penetration<0.76) //75% penetration rate
+	//	{
+	//		if (TempVeh.TempID%4==3 || TempVeh.TempID%4==1 ||TempVeh.TempID%4==2)
+	//			trackedveh.InsertRear(TempVeh); 
+	//	}
+	//	if (penetration>0.49 && penetration<0.51)	//50% penetration rate
+	//	{
+	//		if (TempVeh.TempID%2==1)
+	//			trackedveh.InsertRear(TempVeh); 
+	//	}
+	//	if (penetration>0.24 && penetration<0.26)	//25% penetration rate
+	//	{
+	//		if (TempVeh.TempID%4==1)
+	//			trackedveh.InsertRear(TempVeh); 
+	//	} 
+	}
+	
+}
 
 
 int numberOfPlannedPhase( double cp[3][5], int  rng)
@@ -1233,7 +1741,7 @@ void packOPT(char* buffer,double cp[2][3][5], int msgCnt)
 
 void Construct_eventlist_EV(double cp [2][3][5], int omitphase[8])
 {
-	int temp;
+
 	int tempOmitPhases[8];
 	int iNoOfOmit=0;
 	Schedule Temp_event;
@@ -1349,7 +1857,7 @@ void Construct_eventlist_EV(double cp [2][3][5], int omitphase[8])
 
 void Construct_eventlist(double cp [2][3][5])
 {
-	int temp;
+
 	int iNoPlannedPhaseInRing1=0;
     int iNoPlannedPhaseInRing2=0;
 	iNoPlannedPhaseInRing1=numberOfPlannedPhase(cp[0],1);
@@ -1366,15 +1874,69 @@ void Construct_eventlist(double cp [2][3][5])
 		Temp_event.phase=(int) (cp[0][2][i]+1); // converting phase number from 0-3 to  1-4
 		Eventlist_R1.InsertRear(Temp_event);	
 		// call , the call is neccessary before force off. The controller should know where to go ( which phase will come up after force off )
-		if ( i<iNoPlannedPhaseInRing1-1)
+		if (i<iNoPlannedPhaseInRing1-1)
 		{
 			if ( ( ((int)(cp[0][2][i+1]))+1 )%2 ==0 )  // JUST PUT CALL FOR MAJOR MOVEMENT!!!!!!!!!  THIS IS BC IN THE VERY LOW DEMAND, WE DONT SERVE LEFT TURN!! IF THERE IS NO CAR ON THE DETECTORS 
 			{
-			Temp_event.time=cp[0][1][i];
-			Temp_event.action=PHASE_VEH_CALL;
-			Temp_event.phase=((int)(cp[0][2][i+1]))+1;// converting phase number from 0-3 to  1-4
-			Eventlist_R1.InsertRear(Temp_event);
+				Temp_event.time=cp[0][1][i]-0.2; // 0.2 seconds before force off we put a call
+				Temp_event.action=PHASE_VEH_CALL;
+				Temp_event.phase=((int)(cp[0][2][i+1]))+1;// converting phase number from 0-3 to  1-4
+				Eventlist_R1.InsertRear(Temp_event);
 			}	
+		}
+	
+		if (  (((int)(cp[0][2][i]))+1 )==2 )  // JUST PUT CALL FOR MAJOR MOVEMENT!!!!!!!!!  If it is neccesary to force off 2, we should call 4 before that. Also if it is necessary to forec off 4, we should call 2 before that.
+		{
+			Temp_event.time=cp[0][1][i]-0.2; // 0.2 seconds before force off we put a call
+			Temp_event.action=PHASE_VEH_CALL;
+			Temp_event.phase=4; 
+			Eventlist_R1.InsertRear(Temp_event);
+		}	
+		if (  (((int)(cp[0][2][i]))+1 )==4 )  // JUST PUT CALL FOR MAJOR MOVEMENT!!!!!!!!!  If it is neccesary to force off 2, we should call 4 before that. Also if it is necessary to forec off 4, we should call 2 before that.
+		{
+			Temp_event.time=cp[0][1][i]-0.2; // 0.2 seconds before force off we put a call
+			Temp_event.action=PHASE_VEH_CALL;
+			Temp_event.phase=2; 
+			Eventlist_R1.InsertRear(Temp_event);
+		}
+		//// call, this call is neccesary when we run on Coordination. In coordination mode, coordinated phase should alway have a call. so we put call for coordinated phased at both left and right CP
+		if (ConfigIS.dCoordinationWeight >0 )
+		{	
+			double ii=0.0;			
+			if (cp[0][2][i]+1 ==ConfigIS.iCoordinatedPhase[0])
+			{
+				// Call in every 1.8 seconds (should be less than backup time, which for now it is assume to be 2sec) for all of the times in the feasible set
+				if (i>0) // in case the coordinated phase is not the first phase ahead 
+				{
+					while (ii<cp[0][1][i]-cp[0][0][i-1])
+					{
+						Temp_event.time=(cp[0][0][i-1]+ii);
+						Temp_event.action=PHASE_VEH_CALL;
+						Temp_event.phase=ConfigIS.iCoordinatedPhase[0]; 
+						Eventlist_R1.InsertRear(Temp_event);
+						ii=ii+1.9;
+					}
+					Temp_event.time=(cp[0][0][i-1])-0.2;
+					Temp_event.action=PHASE_VEH_CALL;
+					Temp_event.phase=ConfigIS.iCoordinatedPhase[0]; 
+					Eventlist_R1.InsertRear(Temp_event);
+				}
+				if (i==0)
+				{
+					while (ii<cp[0][0][i])
+					{
+						Temp_event.time=ii;
+						Temp_event.action=PHASE_VEH_CALL;
+						Temp_event.phase=ConfigIS.iCoordinatedPhase[0]; 
+						Eventlist_R1.InsertRear(Temp_event);
+						ii=ii+1.9;
+					}
+					Temp_event.time=(cp[0][0][i])-0.2;
+					Temp_event.action=PHASE_VEH_CALL;
+					Temp_event.phase=ConfigIS.iCoordinatedPhase[0]; 
+					Eventlist_R1.InsertRear(Temp_event);
+				}
+			}
 		}
 		// force off
 		Temp_event.time=cp[0][1][i];
@@ -1391,14 +1953,68 @@ void Construct_eventlist(double cp [2][3][5])
 		Temp_event.phase=(int) (cp[1][2][i]+5);// converting phase number from 0-3 to  5-8
 		Eventlist_R2.InsertRear(Temp_event);
 		// call
-		if ( i<iNoPlannedPhaseInRing2-1)
+		if (i<iNoPlannedPhaseInRing2-1)
 		{
 			if ( (((int)(cp[1][2][i+1]))+5 )%2 == 0 ) // JUST PUT CALL FOR MAJOR MOVEMENT!!!!!!!!!  THIS IS BC IN THE VERY LOW DEMAND, WE DONT SERVE LEFT TURN!! IF THERE IS NO CAR ON THE DETECTORS 
 			{
-				Temp_event.time=cp[1][1][i];
+				Temp_event.time=cp[1][1][i]-0.2; // 0.2 seconds before force off we put a call
 				Temp_event.action=PHASE_VEH_CALL;
 				Temp_event.phase=((int)(cp[1][2][i+1]))+5;// converting phase number from 0-3 to  5-8
-				Eventlist_R1.InsertRear(Temp_event);	
+				Eventlist_R2.InsertRear(Temp_event);	
+			}
+		}
+		
+		if ( (((int)(cp[1][2][i]))+5 ) == 6 ) // JUST PUT CALL FOR MAJOR MOVEMENT!!!!!!!!!  If it is neccesary to force off 6, we should call 8 before that. Also if it is necessary to forec off 8, we should call 6 before that.
+		{
+			Temp_event.time=cp[1][1][i]-0.2; // 0.2 seconds before force off we put a call
+			Temp_event.action=PHASE_VEH_CALL;
+			Temp_event.phase=8;// converting phase number from 0-3 to  5-8
+			Eventlist_R2.InsertRear(Temp_event);	
+		}
+		if ( (((int)(cp[1][2][i]))+5 ) == 8 ) // JUST PUT CALL FOR MAJOR MOVEMENT!!!!!!!!!  If it is neccesary to force off 6, we should call 8 before that. Also if it is necessary to forec off 8, we should call 6 before that.
+		{
+			Temp_event.time=cp[1][1][i]-0.2; // 0.2 seconds before force off we put a call
+			Temp_event.action=PHASE_VEH_CALL;
+			Temp_event.phase=6;// converting phase number from 0-3 to  5-8
+			Eventlist_R2.InsertRear(Temp_event);	
+		}
+		// call, this call is neccesary when we run on Coordination. In coordination mode, coordinated phase should alway have a call
+		if (ConfigIS.dCoordinationWeight >0 )
+		{
+			// Call in every 1.8 seconds (should be less than backup time, which for now it is assume to be 2sec) for all of the times in the feasible set
+			double iii=0.0;
+			if (cp[1][2][i]+5 ==ConfigIS.iCoordinatedPhase[1])
+			{
+				if (i>0)
+				{
+					while (iii<cp[1][1][i]-cp[1][0][i-1])
+					{
+						Temp_event.time=(cp[1][0][i-1]+iii);
+						Temp_event.action=PHASE_VEH_CALL;
+						Temp_event.phase=ConfigIS.iCoordinatedPhase[1]; 
+						Eventlist_R2.InsertRear(Temp_event);
+						iii=iii+1.9;
+					}
+					Temp_event.time=(cp[1][0][i-1])-0.2;
+					Temp_event.action=PHASE_VEH_CALL;
+					Temp_event.phase=ConfigIS.iCoordinatedPhase[1]; 
+					Eventlist_R2.InsertRear(Temp_event);		
+				}
+				if (i==0)
+				{
+					while (iii<cp[1][0][i])
+					{
+						Temp_event.time=iii;
+						Temp_event.action=PHASE_VEH_CALL;
+						Temp_event.phase=ConfigIS.iCoordinatedPhase[1]; 
+						Eventlist_R2.InsertRear(Temp_event);
+						iii=iii+1.9;
+					}
+					Temp_event.time=(cp[1][0][i])-0.2;
+					Temp_event.action=PHASE_VEH_CALL;
+					Temp_event.phase=ConfigIS.iCoordinatedPhase[1]; 
+					Eventlist_R2.InsertRear(Temp_event);		
+				}
 			}
 		}
 		//force off	
@@ -1428,7 +2044,7 @@ void Pack_Event_List(char* tmp_event_data, int &size) // This function is writte
 	int offset=0;
 	byte*   pByte;      // pointer used (by cast)to get at each byte 
                             // of the shorts, longs, and blobs
-    byte    tempByte;   // values to hold data once converted to final format
+//    byte    tempByte;   // values to hold data once converted to final format
 	unsigned short   tempUShort;
     long    tempLong;
     //header 2 bytes
@@ -1509,7 +2125,7 @@ void Pack_Event_List(char* tmp_event_data, int &size) // This function is writte
 }
 
 
-void matchTheBarrierInCPs(double cp[2][3][5])
+void matchTheBarrierInCPs_EV(double cp[2][3][5])
 {
 	int temp1 =numberOfPlannedPhase(cp[0],1);
 	int temp2 =numberOfPlannedPhase(cp[1],2);
@@ -1549,6 +2165,25 @@ void matchTheBarrierInCPs(double cp[2][3][5])
 					cp[1][1][it2]=dtemp3;
 				}	
 		}
+	}
+}
+
+void matchTheBarrierInCPs(double cp[2][3][5])
+{
+	int temp1 =numberOfPlannedPhase(cp[0],1);
+	int temp2 =numberOfPlannedPhase(cp[1],2);
+
+	if (temp1==0)
+	{
+		for (int it=0;it<3;it++)
+			for(int it2=0;it2<5;it2++)
+				cp[0][it][it2]=cp[1][it][it2];
+		
+	}else if (temp2==0)
+	{
+		for (int it=0;it<3;it++)
+			for(int it2=0;it2<5;it2++)
+				cp[1][it][it2]=cp[0][it][it2];	
 	}
 }
 
@@ -1801,9 +2436,9 @@ void creatFeasibleRegionRing1(double CP[3][5], LinkedList<PriorityRequest> PrioR
 	// --- Adjusting the elpase green time of coordinated phase for coordination request in order to to consider early return to green and its consequesces.
 	if (type==6 && rl==1 )	 // during the split time of coordination
 	{	
-		ElapsedGreen=ConfigIS.iCoordinationSplit-ru;
+		ElapsedGreen=max(ConfigIS.dCoordinationSplit[0],ConfigIS.dCoordinationSplit[1])-ru;
 	}		
-	else if (type==6 && rl>1 && ru<ConfigIS.iCoordinationCycle-ConfigIS.iCoordinationSplit - 10 && phaseSeq[0]==phaseInRing) // during other time of the cycle (not split or yield ) , I assumed 10 is the difference between max green and split of the coordinated phase   .   Also, " phaseSeq[0]==phaseInRing  " means the requested coordination phase is the same as current phase. in fact we are in the early return to green 
+	else if (type==6 && rl>1 && ru<ConfigIS.iCoordinationCycle-max(ConfigIS.dCoordinationSplit[0],ConfigIS.dCoordinationSplit[1]) - 10 && phaseSeq[0]==phaseInRing) // during other time of the cycle (not split or yield ) , I assumed 10 is the difference between max green and split of the coordinated phase   .   Also, " phaseSeq[0]==phaseInRing  " means the requested coordination phase is the same as current phase. in fact we are in the early return to green 
 	{
 		ElapsedGreen=0;
 	}
@@ -1816,7 +2451,6 @@ void creatFeasibleRegionRing1(double CP[3][5], LinkedList<PriorityRequest> PrioR
 	double dForwardLeftPoints[iTotalPlanningPhase];
 	if (iTotalPlanningPhase==1) // if the request is in  the current phase
 	{
-		
 		iPhaseIndexInConfiguration=FindIndexArray<int>(ConfigIS.Phase_Seq_R1,ConfigIS.Ring1No,iPhase);
 		//dBackwardRightPoints[0]=max(EndOfPhase[0],ru); //999.0;  
 		cout<<"ru"<<ru<<endl;
@@ -2051,6 +2685,8 @@ void creatFeasibleRegionRing1(double CP[3][5], LinkedList<PriorityRequest> PrioR
 		
 		iPhaseIndexInConfiguration=FindIndexArray<int>(ConfigIS.Phase_Seq_R1,ConfigIS.Ring1No,iPhase);
 		dForwardRightPoints[0]= globalgmax[iPhaseIndexInConfiguration]-ElapsedGreen+initialGreen;
+		cout<<"ConfigIS.Gmin[iPhaseIndexInConfiguration]"<<ConfigIS.Gmin[iPhaseIndexInConfiguration]<<endl;
+		cout<<"initialGreen"<<initialGreen <<" ElapsedGreen "<<ElapsedGreen<<endl;
 		dForwardLeftPoints[0] = max(0.0,ConfigIS.Gmin[iPhaseIndexInConfiguration]+initialGreen-ElapsedGreen);
 		iTemp1=phaseSeq[1];
 		iPhaseTemp=iTemp1%10;
@@ -2156,6 +2792,7 @@ void creatFeasibleRegionRing1(double CP[3][5], LinkedList<PriorityRequest> PrioR
 		cout<<"CP right             "<< ii << " "<< CP[1][ii]<<endl;
 		cout<< "phase "<< CP[2][ii]<<endl;
 	}
+	
 		
 }
 
@@ -2208,13 +2845,13 @@ void creatFeasibleRegionRing2(double  CP[3][5], LinkedList<PriorityRequest> Prio
 	iPhase=iTemp%10;   // current phase in formate of 0 to 3
 	
 	////////DEBATE HERE!!!!! about elaps time!!!!
-			
+		////?????????????????????????????????????????????????????????????	
 	// --- Adjusting the elpase green time of coordinated phase for coordination request in order to to consider early return to green and its consequesces.
 	if (type==6 && rl==1 )	 // during the split time of coordination
 	{	
-		ElapsedGreen=ConfigIS.iCoordinationSplit-ru;
+		ElapsedGreen=max(ConfigIS.dCoordinationSplit[0],ConfigIS.dCoordinationSplit[1])-ru;
 	}		
-	else if (type==6 && rl>1 && ru<ConfigIS.iCoordinationCycle-ConfigIS.iCoordinationSplit - 10 && phaseSeq[0]==phaseInRing) // during other time of the cycle (not split or yield ) , I assumed 10 is the difference between max green and split of the coordinated phase   .   Also, " phaseSeq[0]==phaseInRing  " means the requested coordination phase is the same as current phase. in fact we are in the early return to green 
+	else if (type==6 && rl>1 && ru<ConfigIS.iCoordinationCycle-max(ConfigIS.dCoordinationSplit[0],ConfigIS.dCoordinationSplit[1]) - 10 && phaseSeq[0]==phaseInRing) // during other time of the cycle (not split or yield ) , I assumed 10 is the difference between max green and split of the coordinated phase   .   Also, " phaseSeq[0]==phaseInRing  " means the requested coordination phase is the same as current phase. in fact we are in the early return to green 
 	{
 		ElapsedGreen=0;
 	}
@@ -2595,7 +3232,6 @@ void creatFeasibleRegionRing1_EV(double  CP[3][5], int phaseInRing, double ru,do
 	{
 		for (int j=0; j<iTotalPlanningPhase; j++)
 		{
-			cout<<"Here"<<endl;
 			CP[0][j]=EndOfPhase[j];
 			CP[1][j]=CP[0][j];
 			iTemp=phaseSeq[j];
@@ -2651,10 +3287,16 @@ void creatCPexactlyAsOptSol(double  CP[2][3][5], double *EndOfPhaseRing1,int *ph
 	int iTotalPlanningPhase=0;
 	iTotalPlanningPhase= min(t1,t2); // at most we plan 5 phase ahead in each ring (this is to pass to COP). also, the number of the planned phase in first and second ring should be the same.
 	iTotalPlanningPhase= min(iTotalPlanningPhase,5);
-	cout<< "iTotalPlanningPhase"<<iTotalPlanningPhase<<endl;
+	cout<< "iTotalPlanningPhase"<<iTotalPlanningPhase<<endl; 
+	cout<< "cycle lenght"<<ConfigIS.iCoordinationCycle<<endl;
 	// Ring 1
 	for (int j=0; j<iTotalPlanningPhase; j++)
 	{
+		if (ConfigIS.iCoordinationCycle>0 && EndOfPhaseRing1[j] > ConfigIS.iCoordinationCycle)  // In the case of coordination priority, if there is early return to green for coordinated phase, we should release the max green for coordinated phase. One of the possible extrem points may be Big M. In order to avoid endofphasering1 gets a large number, we need this checking. 150 is the largest assumed cycle lenght
+		    EndOfPhaseRing1[j]=ConfigIS.iCoordinationCycle;
+		if (ConfigIS.iCoordinationCycle==0 && EndOfPhaseRing1[j] > 150)
+			EndOfPhaseRing1[j]=150;
+			
 		CP[0][0][j]=EndOfPhaseRing1[j];
 		CP[0][1][j]=CP[0][0][j];
 		iTemp=phaseSeqRing1[j];
@@ -2663,6 +3305,10 @@ void creatCPexactlyAsOptSol(double  CP[2][3][5], double *EndOfPhaseRing1,int *ph
 	//Ring 2
 	for (int j=0; j<iTotalPlanningPhase; j++)
 	{
+		if (ConfigIS.iCoordinationCycle>0 && EndOfPhaseRing2[j] > ConfigIS.iCoordinationCycle)  // In the case of coordination priority, if there is early return to green for coordinated phase, we should release the max green for coordinated phase. One of the possible extrem points may be Big M. In order to avoid endofphasering1 gets a large number, we need this checking. 150 is the largest assumed cycle lenght
+		    EndOfPhaseRing2[j]=ConfigIS.iCoordinationCycle;
+		if (ConfigIS.iCoordinationCycle==0 && EndOfPhaseRing2[j] > 150)
+			EndOfPhaseRing2[j]=150;
 		CP[1][0][j]=EndOfPhaseRing2[j];
 		CP[1][1][j]=CP[1][0][j];
 		iTemp=phaseSeqRing2[j];
@@ -2729,7 +3375,13 @@ void readOptPlanFromFile(char *filename,double  aCriticalPoints[2][3][5])
         if (ReqPhaseNo<=10) // Double check if the req in next cycle is not being process in current cycl!!! 
 		{
 			if ( ReqPhaseNo<SP[CurRing]-1)
-				ReqPhaseNo=ReqPhaseNo*10;			 
+				ReqPhaseNo=ReqPhaseNo*10;
+			// check if the coordination request for next cycle is not being processed in the current cycle!!!
+			if (ReqType==6)
+			{
+				if ((g[0][1]==0) || (g[0][5] ==0))
+					ReqPhaseNo=ReqPhaseNo*10;
+			}				 
 		}
         int phase_in_ring=ReqPhaseNo-4*CurRing; // If in ring 2, phase should -4.
         cout<<"ReqPhaseNo "<<ReqPhaseNo<<endl;
@@ -2817,16 +3469,15 @@ void readOptPlanFromFile(char *filename,double  aCriticalPoints[2][3][5])
 	//~ }
 	//~ else  // if we have just coordination re in table, or just truck and transit request in table
 	
-	if (congested==1) // if we face very congested situation , follow the optimal solution from solver
+	int iPosOfEarliestReqInPrioReqList1=findTheEarliestReqInERP(PrioReqList[0]); // in ring 1
+	int iPosOfEarliestReqInPrioReqList2=findTheEarliestReqInERP(PrioReqList[1]); // in ring 2
+
+	
+	if (congested==1 || codeUsage==2) // if we face very congested situation , Or when we run adaptive control, follow the optimal solution from solver
 		creatCPexactlyAsOptSol(aCriticalPoints,mustChangeTime1, Phase1,t1,mustChangeTime2, Phase2,t2);
 	else
 	{
-		int iPosOfEarliestReqInPrioReqList1=findTheEarliestReqInERP(PrioReqList[0]); // in ring 1
-		//cout<<"iPosOfEarliestReqInPrioReqList1"<<iPosOfEarliestReqInPrioReqList1<<endl;
-		int iPosOfEarliestReqInPrioReqList2=findTheEarliestReqInERP(PrioReqList[1]); // in ring 2
-		//cout<<"iPosOfEarliestReqInPrioReqList2"<<iPosOfEarliestReqInPrioReqList2<<endl;
-		
-		if (codeUsage==1) //  if priority and actuation logic is applied (Send to Interface )
+		if (codeUsage==1) //  if priority and actuation logic is applied (Send optimal schedule to Interface )
 		{
 			if (dTotalDelay>0) // if the total delay of requests is positive, we have to follow exactly the solution of the optimizer and therefore there is no flexibility 
 				creatCPexactlyAsOptSol(aCriticalPoints,mustChangeTime1, Phase1,t1,mustChangeTime2, Phase2,t2);
@@ -2844,7 +3495,7 @@ void readOptPlanFromFile(char *filename,double  aCriticalPoints[2][3][5])
 				}
 			}
 		}
-		else //  if priority + intelligent phase allocation alg applied (Send to COP ) // in this case, if we have request in one ring, and coordination in the second ring, we focuse on priority request !!!
+		else //  if priority + intelligent phase allocation alg applied (Send optimal schedule to COP ) // in this case, if we have request in one ring, and coordination in the second ring, we focuse on priority request !!!
 		{
 			int tempTypeR1=0;
 			int tempTypeR2=0;
@@ -2864,8 +3515,16 @@ void readOptPlanFromFile(char *filename,double  aCriticalPoints[2][3][5])
 				creatFeasibleRegionRing1(aCriticalPoints[0],PrioReqList[0],PrioReqList[0].Data().iPhaseCycle,PrioReqList[0].Data().dRl,PrioReqList[0].Data().dRu, PrioReqList[0].Data().dReqDelay, PrioReqList[0].Data().iType,mustChangeTime1, Phase1,t1, ConfigIS, dGlobalGmax ,InitTime1[0],InitGrn[0],iPosOfEarliestReqInPrioReqList2); 
 			else if ( (tempTypeR2!=COORDINATION && tempTypeR1!=COORDINATION) || (tempTypeR2==COORDINATION && tempTypeR1==COORDINATION) )
 			{
-				creatFeasibleRegionRing1(aCriticalPoints[0],PrioReqList[0],PrioReqList[0].Data().iPhaseCycle,PrioReqList[0].Data().dRl,PrioReqList[0].Data().dRu, PrioReqList[0].Data().dReqDelay, PrioReqList[0].Data().iType,mustChangeTime1, Phase1,t1, ConfigIS, dGlobalGmax ,InitTime1[0],InitGrn[0],iPosOfEarliestReqInPrioReqList2); 
-				creatFeasibleRegionRing2(aCriticalPoints[1],PrioReqList[1],PrioReqList[1].Data().iPhaseCycle,PrioReqList[1].Data().dRl,PrioReqList[1].Data().dRu, PrioReqList[1].Data().dReqDelay, PrioReqList[1].Data().iType,mustChangeTime2, Phase2,t2, ConfigIS, dGlobalGmax, InitTime1[1],InitGrn[1],iPosOfEarliestReqInPrioReqList1); 
+				if (iPosOfEarliestReqInPrioReqList1>-1) 
+				{
+					PrioReqList[0].Reset(iPosOfEarliestReqInPrioReqList1);
+					creatFeasibleRegionRing1(aCriticalPoints[0],PrioReqList[0],PrioReqList[0].Data().iPhaseCycle,PrioReqList[0].Data().dRl,PrioReqList[0].Data().dRu, PrioReqList[0].Data().dReqDelay, PrioReqList[0].Data().iType,mustChangeTime1, Phase1,t1, ConfigIS, dGlobalGmax ,InitTime1[0],InitGrn[0],iPosOfEarliestReqInPrioReqList2); 
+				}
+				if (iPosOfEarliestReqInPrioReqList2>-1) 
+				{
+					PrioReqList[1].Reset(iPosOfEarliestReqInPrioReqList2);
+					creatFeasibleRegionRing2(aCriticalPoints[1],PrioReqList[1],PrioReqList[1].Data().iPhaseCycle,PrioReqList[1].Data().dRl,PrioReqList[1].Data().dRu, PrioReqList[1].Data().dReqDelay, PrioReqList[1].Data().iType,mustChangeTime2, Phase2,t2, ConfigIS, dGlobalGmax, InitTime1[1],InitGrn[1],iPosOfEarliestReqInPrioReqList1); 
+				}
 			}
 		}
 	}
@@ -3077,7 +3736,7 @@ void readOptPlanFromFileForEV(char *filename,double aCriticalPoints[2][3][5], in
                 if(V[i][RP]!=0)
                 {
                     Split2[ii]=V[i][RP];
-                    cout<<" Split2[ii]"<< Split2[ii]<<endl;
+                  //  cout<<" Split2[ii]"<< Split2[ii]<<endl;
                     ii++;
                 }
             }
@@ -3339,7 +3998,7 @@ void ReqListFromFile_EV(char *filename,LinkedList<ReqEntry>& Req_List)
 
 
 // Without EV case: will extend the MaxGrn to some portion for Transit requested phases
-void LinkList2DatFile(LinkedList<ReqEntry> Req_List,char *filename,double InitTime[2],int InitPhase[2],double GrnElapse[2],double transitWeigth, double truckWeigth,double coordinationWeigth)
+void LinkList2DatFile(LinkedList<ReqEntry> Req_List,char *filename,double InitTime[2],int InitPhase[2],double GrnElapse[2],double transitWeigth, double truckWeigth,double coordinationWeigth,double dVehDistToStpBar[130],double dVehSpd[130],int iVehPhase[130],double Ratio[130],double indic[130],int laneNumber[130],double dQsizeOfEachLane[48], double Tq[130])
 {
     //-- Convert request linkedlist to the NewModel.dat file for GLPK solver.
     //-- Init1 and Init2 are the initial time for the two rings while current phases are in R or Y.
@@ -3350,9 +4009,37 @@ void LinkList2DatFile(LinkedList<ReqEntry> Req_List,char *filename,double InitTi
 
     int R1No=ConfigIS.Ring1No;
     int R2No=ConfigIS.Ring2No;
+    int icurrent=0;
 
     fs<<"data;\n";
-    fs<<"param current:=0;\n";
+    if (HaveCoordInList==1) // in order to know in which 
+	{
+		Req_List.Reset();
+		int iAlreadySetCurrent=0;
+		if(Req_List.ListEmpty()==0)
+		{
+			while(!Req_List.EndOfList())
+			{
+				if (Req_List.Data().VehClass==6 && iAlreadySetCurrent==0) // if it is coordination request, we should know 
+				{
+					if (Req_List.Data().MinGreen>0)
+					{
+						fs<<"param current:="<<max(ConfigIS.dCoordinationSplit[0],ConfigIS.dCoordinationSplit[1])-Req_List.Data().MinGreen <<";\n";
+						icurrent=max(ConfigIS.dCoordinationSplit[0],ConfigIS.dCoordinationSplit[1])-Req_List.Data().MinGreen;
+					}
+					else if (Req_List.Data().ETA>0)
+					{
+						fs<<"param current:="<<ConfigIS.iCoordinationCycle-Req_List.Data().ETA <<";\n";	
+						icurrent=ConfigIS.iCoordinationCycle-Req_List.Data().ETA ;
+					}
+					iAlreadySetCurrent=1;			
+				}
+				Req_List.Next();
+			}
+		}
+	}else
+	fs<<"param current:=0;\n";
+	
     fs<<"param SP1:="<<InitPhase[0]<<";\n";  // This is the real phase [1-4]
     fs<<"param SP2:="<<InitPhase[1]<<";\n";  // This is the real phase [5-8]
 
@@ -3426,7 +4113,7 @@ void LinkList2DatFile(LinkedList<ReqEntry> Req_List,char *filename,double InitTi
     fs<<";\n\n";
     //*/
 
-	// ReqList2Log(Req_List);
+	// adding green extention portion to the max green time for the requested phases
 	Req_List.Reset();
 	int iGmax[2][4]={}; // max green time of each phase in ring 1
 	for(int i=0;i<R1No;i++)
@@ -3460,38 +4147,59 @@ void LinkList2DatFile(LinkedList<ReqEntry> Req_List,char *filename,double InitTi
         }
     }
 
+
+	// in coordination case, the maximum green time for the two coordinated phase should be the same becasue of MILP max constraints!!
+	Req_List.Reset();
+	if (ConfigIS.dCoordinationWeight>0)
+	{
+		int temp_indx1;
+		double temp_val1;
+		for(int i=0;i<R1No;i++)
+		{
+			int k=ConfigIS.Phase_Seq_R1[i];
+			if (k+1 == ConfigIS.iCoordinatedPhase[0])
+			{	
+				temp_val1=dGlobalGmax[i];
+				temp_indx1=i;
+			}
+		}
+		for(int i=0;i<R2No;i++)
+		{
+			int k=ConfigIS.Phase_Seq_R2[i];
+			if (k+5 == ConfigIS.iCoordinatedPhase[1])
+			{
+				dGlobalGmax[i+4]= max(dGlobalGmax[i+4],temp_val1);
+				dGlobalGmax[temp_indx1]=max(dGlobalGmax[i+4],temp_val1);
+				iGmax[1][i]=(int) dGlobalGmax[i+4];
+				iGmax[0][temp_indx1]= (int) dGlobalGmax[i+4];
+			}
+		}		
+	}
+
 	Req_List.Reset();
     fs<<"param gmax      \t:=";
     for(int i=0;i<R1No;i++)
     {
         int k=ConfigIS.Phase_Seq_R1[i];
-        fs<<"\t"<<(k+1)<<"  "<<dGlobalGmax[i];
-		//~ if(RequestPhaseInList(Req_List,(k+1))>0)
-        //~ {
-			//~ //iGmax[0][i]=int(ConfigIS.Gmax[k]*(1+MaxGrnExtPortion));
-            //~ fs<<"\t"<<(k+1)<<"  "<<iGmax[0][i];
-        //~ }
-        //~ else
-        //~ {
-			//~ iGmax[0][i]=(int) ConfigIS.Gmax[k];
-            //~ fs<<"\t"<<(k+1)<<"  "<<ConfigIS.Gmax[k];
-        //~ }
+       // if ( ( (InitPhase[0]==k+1) && (HaveCoordInList!=1) ) || ((InitPhase[0]==k+1) && (HaveCoordInList==1) && (InitPhase[0]!=ConfigIS.iCoordinatedPhase[0]) )) // if the current phase is not the coordinated phase. or if the coordiantion is not on
+	//		dGlobalGmax[i]=dGlobalGmax[i]-GrnElapse[0];
+	//	else if ((InitPhase[0]==k+1) && (HaveCoordInList==1) && (InitPhase[0]==ConfigIS.iCoordinatedPhase[0]) && (icurrent< ConfigIS.iCoordinationSplit)) // if we are in the coordinated split time interval, we should not reduce the length of max green time 
+	//		dGlobalGmax[i]=dGlobalGmax[i];
+		if (dGlobalGmax[i] <= ConfigIS.Gmin[k])	
+			dGlobalGmax[i] = ConfigIS.Gmin[k];
+		 fs<<"\t"<<(k+1)<<"  "<<dGlobalGmax[i];
     }
     for(int i=0;i<R2No;i++)
     {
         int k=ConfigIS.Phase_Seq_R2[i];
+      //  if ( ( (InitPhase[1]==k+5) && (HaveCoordInList!=1) ) || ((InitPhase[1]==k+5) && (HaveCoordInList==1) && (InitPhase[1]!=ConfigIS.iCoordinatedPhase[1]) )) // if the current phase is not the coordinated phase. or if the coordiantion is not on
+		//	dGlobalGmax[i+4]=dGlobalGmax[i+4]-GrnElapse[1];
+		//else if ((InitPhase[1]==k+5) && (HaveCoordInList==1) && (InitPhase[1]==ConfigIS.iCoordinatedPhase[1]) && (icurrent< ConfigIS.iCoordinationSplit)) // if we are in the coordinated split time interval, we should not reduce the length of max green time 
+		//	dGlobalGmax[i+4]=dGlobalGmax[i+4];
+		if (dGlobalGmax[i+4] <= ConfigIS.Gmin[k+4])	
+			dGlobalGmax[i+4] = ConfigIS.Gmin[k+4];
         fs<<"\t"<<(k+5)<<"  "<< dGlobalGmax[i+4];
-		//~ if(RequestPhaseInList(Req_List,(k+5))>0)
-        //~ {
-			//~ iGmax[1][i]=int(ConfigIS.Gmax[k+4]*(1+MaxGrnExtPortion));
-            //~ fs<<"\t"<<(k+5)<<"  "<< iGmax[1][i];
-        //~ }
-        //~ else
-        //~ {
-			//~ iGmax[1][i]=(int) ConfigIS.Gmax[k+4];
-            //~ fs<<"\t"<<(k+5)<<"  "<< ConfigIS.Gmax[k+4];
-        //~ }
-    }
+	 }
 
     fs<<";\n\n";
 
@@ -3507,9 +4215,8 @@ void LinkList2DatFile(LinkedList<ReqEntry> Req_List,char *filename,double InitTi
 		while(!Req_List.EndOfList())
 		{
 			//cout<<"Req_List.Data().VehID" << Req_List.Data().VehID<< endl;
-			if (strcmp(tempID,Req_List.Data().VehID)!=0);
+			if (Req_List.Data().VehClass!=6) // only consider non coordination request in this weighting list. THe coordination request weight is considered in the objective function 
 			{
-				
 				NumberofRequests++;
 				if (Req_List.Data().VehClass==2)
 					iNumberofTransitInList++;
@@ -3534,7 +4241,11 @@ void LinkList2DatFile(LinkedList<ReqEntry> Req_List,char *filename,double InitTi
 			fs<<" ";
 		}
 		fs<<" ;  \n";
+	}else
+	{
+	    fs<<" 1 0 2 0 3 5 4 0 5 0 6 0 7 0 8 0 9 0 10 0 ; \n";	
 	}
+	
 	
 	if (iNumberofTransitInList>1)
 		iNumberofTransitInList=iNumberofTransitInList-1;
@@ -3566,20 +4277,17 @@ void LinkList2DatFile(LinkedList<ReqEntry> Req_List,char *filename,double InitTi
     int ReqSeq=1;
     while(!Req_List_New.EndOfList())
     {
-        fs<<ReqSeq<<"  ";
-        for(int j=1;j<=8;j++)
-        {			
-            if(Req_List_New.Data().Phase==j)
-            {
-				if (Req_List_New.Data().MinGreen>0) // in this case the vhicle is in the queue and we should set the Rl as less as possible!!!  // MZ Added to hedge against the worst case that may happen when the vehicle is in the queue
+		if (Req_List_New.Data().VehClass!=6) // if it is a coordination request, we will check it in at it in the Cu and Cl 
+        {
+			fs<<ReqSeq<<"  ";
+			for(int j=1;j<=8;j++)
+			{			
+				if(Req_List_New.Data().Phase==j)
 				{
-					int iRingOfTheRequest=FindRingNo(j-1); 
-					
-					if (Req_List_New.Data().VehClass==6)// if it is a coordination request
+					if (Req_List_New.Data().MinGreen>0) // in this case the vhicle is in the queue and we should set the Rl as less as possible!!!  // MZ Added to hedge against the worst case that may happen when the vehicle is in the queue
 					{
-						fs<< 1 << "  " ;					
-					}else
-					{
+						int iRingOfTheRequest=FindRingNo(j-1); 
+						fs<< 1 << "  " ;
 						if ( iGmax[iRingOfTheRequest][(j-1)%4]<=0 )
 						{
 							if (j%2==0) 
@@ -3587,30 +4295,17 @@ void LinkList2DatFile(LinkedList<ReqEntry> Req_List,char *filename,double InitTi
 							else
 								iGmax[iRingOfTheRequest][(j-1)%4]=iGmax[iRingOfTheRequest][(j-1)%4+1];
 						}
-						if ( (InitPhase[iRingOfTheRequest]==j) )
-							fs<< max( (Req_List_New.Data().MinGreen+ROBUSTTIME_UP) -(iGmax[iRingOfTheRequest][(j-1)%4]-GrnElapse[iRingOfTheRequest]), double (1) ) <<"  "; 
-						else
-						fs<< max( (Req_List_New.Data().MinGreen+ROBUSTTIME_UP)-(iGmax[iRingOfTheRequest][(j-1)%4]), float(1) ) <<"  ";   // Mehdi Added to hedge against the worst case that may happen when the vehicle is in the queue
 					}
+					else
+						fs<<max(Req_List_New.Data().ETA-ROBUSTTIME_LOW,float(1.0))<<"  "; 
 				}
 				else
-				{
-					if (Req_List_New.Data().VehClass==6) // if it is a coordination request
-					{
-						fs<< Req_List_New.Data().ETA << "  " ;					
-					}else
-					{
-						fs<<max(Req_List_New.Data().ETA-ROBUSTTIME_LOW,float(1.0))<<"  "; 
-					}
-				}
+					fs<<".  ";
 			}
-            else
-                fs<<".  ";
-        }
-        if(ReqSeq<Req_List_New.ListSize())
-            fs<<"\n";
-        Req_List_New.Next();
-        ReqSeq=ReqSeq+1;
+			fs<<"\n";
+			ReqSeq=ReqSeq+1;
+		}
+		Req_List_New.Next();
     }
     fs<<";\n";
     fs<<"param Ru (tr): 1 2 3 4 5 6 7 8:=\n";
@@ -3618,37 +4313,189 @@ void LinkList2DatFile(LinkedList<ReqEntry> Req_List,char *filename,double InitTi
     ReqSeq=1;
     while(!Req_List_New.EndOfList())
     {
-        fs<<ReqSeq<<"  ";
-        for(int j=1;j<=8;j++)
+		if (Req_List_New.Data().VehClass!=6) // if it is a coordination request, we will check it in at it in the Cu and Cl 
         {
-            if(Req_List_New.Data().Phase==j)
-            {
-				if (Req_List_New.Data().MinGreen>0 && Req_List_New.Data().VehClass!=6) 
+			fs<<ReqSeq<<"  ";
+			for(int j=1;j<=8;j++)
+			{
+				if(Req_List_New.Data().Phase==j)
 				{
-					fs<< ROBUSTTIME_UP+Req_List_New.Data().MinGreen<<"  "; 
+					if (Req_List_New.Data().MinGreen>0) // in this case the vhicle is in the queue and we should set the Ru at most less than maximum remaining green time!!  // MZ Added to hedge against the worst case that may happen when the vehicle is in the queue
+					{
+						int iRingOfTheRequestt=FindRingNo(j-1);
+						double dmaxGreenForThisPhase=0.0;
+						if (iRingOfTheRequestt==1)
+						{
+							for(int i=0;i<R2No;i++)
+							{
+								int kkk=ConfigIS.Phase_Seq_R2[i];
+								if (kkk+5==j)
+								dmaxGreenForThisPhase=dGlobalGmax[i+4];	
+							}
+						}
+						if (iRingOfTheRequestt==0)
+						{
+							for(int i=0;i<R1No;i++)
+							{
+								int kkk=ConfigIS.Phase_Seq_R1[i];
+								if (kkk+1==j)
+									dmaxGreenForThisPhase=dGlobalGmax[i];	
+							}
+						}
+
+						if (Req_List_New.Data().MinGreen+ROBUSTTIME_UP >=dmaxGreenForThisPhase )
+							fs<<dmaxGreenForThisPhase  <<"  ";
+						else
+								fs<<Req_List_New.Data().MinGreen+ROBUSTTIME_UP  <<"  ";		
+					}
+					else
+						fs<<Req_List_New.Data().ETA+ROBUSTTIME_UP <<"  ";
+
 				}
-				else if (Req_List_New.Data().MinGreen<=0 && Req_List_New.Data().VehClass!=6) 
-				{
-					fs<<Req_List_New.Data().ETA+ROBUSTTIME_UP <<"  "; 
-				}
-				else if (Req_List_New.Data().MinGreen<=0 && Req_List_New.Data().VehClass==6) 
-				{
-					fs<< Req_List_New.Data().ETA + ConfigIS.iCoordinationSplit<< "  " ;
-				}
-				else if (Req_List_New.Data().MinGreen>0 && Req_List_New.Data().VehClass==6) 
-				{
-					fs<< Req_List_New.Data().MinGreen << "  " ;
-				}
+				else
+					fs<<".  ";
 			}
-            else
-                fs<<".  ";
-        }
-        if(ReqSeq<Req_List_New.ListSize())
-            fs<<"\n";
-        Req_List_New.Next();
-        ReqSeq=ReqSeq+1;
+				fs<<"\n";
+			ReqSeq=ReqSeq+1;
+		}
+		Req_List_New.Next();
     }
-    fs<<";\n";
+     fs<<";\n";
+    if (HaveCoordInList==1) // in order to know in which 
+	{
+		fs<<"param Cl (tr): 1 2 3 4 5 6 7 8:=\n";
+		Req_List_New.Reset();
+		ReqSeq=1;
+		while(!Req_List_New.EndOfList())
+		{
+			if (Req_List_New.Data().VehClass==6)
+			{
+				fs<<ReqSeq<<"  ";
+				for(int j=1;j<=8;j++)
+				{
+					if(Req_List_New.Data().Phase==j)
+					{
+						if (Req_List_New.Data().MinGreen>0 ) // in this case the vhicle is in the queue and we should set the Ru at most less than maximum remaining green time!!  // MZ Added to hedge against the worst case that may happen when the vehicle is in the queue
+							fs<< 1 << "  " ;
+						else 
+							fs<< Req_List_New.Data().ETA << "  " ;					
+					}
+					else
+						fs<<".  ";
+				}
+				fs<<"\n";
+				ReqSeq=ReqSeq+1;
+			}
+			Req_List_New.Next();
+		}
+		fs<<";\n";
+
+     
+		fs<<"param Cu (tr): 1 2 3 4 5 6 7 8:=\n";
+		Req_List_New.Reset();
+		ReqSeq=1;
+		while(!Req_List_New.EndOfList())
+		{
+			if (Req_List_New.Data().VehClass==6)
+			{
+				fs<<ReqSeq<<"  ";
+				for(int j=1;j<=8;j++)
+				{
+					if(Req_List_New.Data().Phase==j)
+					{
+						if (Req_List_New.Data().MinGreen>0 ) // in this case the vhicle is in the queue and we should set the Ru at most less than maximum remaining green time!!  // MZ Added to hedge against the worst case that may happen when the vehicle is in the queue
+							fs<<Req_List_New.Data().MinGreen  <<"  ";	
+						else 
+						{
+							if (ConfigIS.dCoordinationSplit[0]==ConfigIS.dCoordinationSplit[1])
+								fs<< Req_List_New.Data().ETA + ConfigIS.dCoordinationSplit[0]<< "  " ;
+							else
+							{
+								if (Req_List_New.Data().Phase==ConfigIS.iCoordinatedPhase[0])
+									fs<< Req_List_New.Data().ETA + ConfigIS.dCoordinationSplit[0]<< "  " ;
+								if (Req_List_New.Data().Phase==ConfigIS.iCoordinatedPhase[1])
+									fs<< Req_List_New.Data().ETA + ConfigIS.dCoordinationSplit[1]<< "  " ;	
+							}
+						}
+					}
+					else
+						fs<<".  ";
+				}
+				fs<<"\n";
+				ReqSeq=ReqSeq+1;
+			}
+			Req_List_New.Next();
+		}
+		fs<<";\n";
+	}
+	if ((codeUsage==2) && (currentTotalVeh>0)) // if we consider adaptive control and the number of vehicles in the trajectory is greater than zero
+	{
+		//if (currentTotalVeh>31) // !!!! increase solution time!!!!
+			//currentTotalVeh=31;
+		float t=0.0;
+		fs<<"param s:=" << dQDischargingSpd << "; \n";
+		fs<<"param qSp:=" << dQueuingSpd << "; \n";
+		fs<<"param Ar:=";
+		for (int i=0;i<currentTotalVeh;i++)
+		{
+			t=roundf(dVehDistToStpBar[i]*10)/10;
+			fs<< i+1 <<" " << t<<" ";
+		}
+		fs<<"; \n";
+		fs<<"param Ve:=";
+		for (int i=0;i<currentTotalVeh;i++)
+		{
+			t=roundf(dVehSpd[i]*10)/10;
+			fs<< i+1 <<" " <<t<<" ";
+		}
+		fs<<"; \n";
+		fs<<"param Ln:=";
+		for (int i=0;i<currentTotalVeh;i++)
+		{
+			fs<< i+1 <<" " <<laneNumber[i]<<" ";
+		}
+		fs<<"; \n";
+		fs<<"param Ratio:=";
+		for (int i=0;i<currentTotalVeh;i++)
+		{
+			t=roundf(Ratio[i]*10)/10;
+			fs<< i+1 <<" " <<t<<" ";
+		}
+		fs<<"; \n";
+		
+		fs<<"param Ph:=";
+		for (int i=0;i<currentTotalVeh;i++)
+		{
+			fs<< i+1 <<" " <<iVehPhase[i]<<" ";
+		}
+		fs<<"; \n";
+		
+		fs<<"param Tq:=";
+		for (int i=0;i<currentTotalVeh;i++)
+		{
+			t=roundf(Tq[i]*10)/10;
+			fs<< i+1 <<" " <<t<<" ";
+		}
+		fs<<"; \n";
+		
+		fs<<"param LaPhSt:=";
+		for (int i=0;i<TotalLanes;i++)
+		{
+			fs<< i+1 <<" " <<bLaneSignalState[i]<<" ";
+		}
+		fs<<"; \n";
+		
+		fs<<"param L0:=";
+		for (int i=0;i<TotalLanes;i++)
+		{
+			t=roundf(dQsizeOfEachLane[i]*10)/10;
+			fs<< i+1 <<" " <<t<<" ";
+		}
+		fs<<"; \n";
+		
+		
+	}
+	
     fs<<"end;";
     fs.close();
 }
@@ -3794,9 +4641,7 @@ void LinkList2DatFileForEV(LinkedList<ReqEntry> Req_List,char *filename,double I
         int k=configIS.Phase_Seq_R1[i];
 
         double temp_grnMax=configIS.Gmax[k]; //RequestPhaseInList
-		//cout<< "temp_grnMax "<<temp_grnMax<<endl;
-		//cout<< "MaxGrnTime  "<<MaxGrnTime<<endl;
-        if(temp_grnMax>0)    // Phase
+	    if(temp_grnMax>0)    // Phase
         {
             if(ChangeMaxGrn!=0) // EV: not only change phase
             {
@@ -3842,11 +4687,10 @@ void LinkList2DatFileForEV(LinkedList<ReqEntry> Req_List,char *filename,double I
 	//====================MaxGreen=240======================//
 	for(int i=0;i<2;i++)
 	{
-		//cout<< " RlP[i]   "<<RlP[i]<<endl;
 		if(RlP[i]>=0)
 		{
 			int MP1=ConfigIS.MissPhase[i];// Missing phase
-			int RlP1=ConfigIS.MP_Relate[i];// Missing Phase related
+			//int RlP1=ConfigIS.MP_Relate[i];// Missing Phase related
 			fs<<"\t"<<(MP1+1)<<"  "<<MaxGrnTime;
 		}
 	}
@@ -3865,19 +4709,12 @@ void LinkList2DatFileForEV(LinkedList<ReqEntry> Req_List,char *filename,double I
     {
 		while(!Req_List.EndOfList())
 		{
-			//cout<<"Req_List.Data().VehID" << Req_List.Data().VehID<< endl;
-			if (strcmp(tempID,Req_List.Data().VehID)!=0);
-			{
-				
 				NumberofRequests++;
-				//cout<< "NumberofRequests"<<NumberofRequests<<endl;
 				fs<<NumberofRequests;
 				fs<<" ";
 				fs<<Req_List.Data().VehClass;			
 				fs<<" ";
-				//cout<<"fs<<Req_List.Data().VehClass;			"<<Req_List.Data().VehClass<<endl;
 				strcpy(tempID,Req_List.Data().VehID);
-			}
 			Req_List.Next();
 		}
 		while (NumberofRequests<10)
@@ -4119,8 +4956,7 @@ void GLPKSolver()
 	double ttt2;
 	double t1=GetSeconds();
 	// The argument should be the real phase 1-8.
-	struct timeval start, end;
-	long mtime, seconds, useconds;
+	struct timeval start;
 	gettimeofday(&start, NULL);
 
 	char modFile[128]="/nojournal/bin/NewModel.mod";
@@ -4171,10 +5007,13 @@ void GLPKSolver()
 		
 	glp_mpl_build_prob(tran, mip);
 	glp_simplex(mip, NULL);
-
-	glp_intopt(mip, NULL);  //modified by YF: returns 0 if solve successfully! 11142013
-
-	ret = glp_mpl_postsolve(tran, mip, GLP_MIP);
+	glp_iocp iocp;
+	glp_init_iocp(&iocp);
+	iocp.tm_lim=4000; // if after 4 seconds the optimizer can not find the best MIP solution, skip this time of solving
+  
+	glp_intopt(mip, &iocp);
+	
+    ret = glp_mpl_postsolve(tran, mip, GLP_MIP);
 
 	if (ret != 0){
 		fprintf(stderr, "Error on postsolving model\n");
@@ -4184,4 +5023,1137 @@ void GLPKSolver()
 				}
 	skip: glp_mpl_free_wksp(tran);
 	glp_delete_prob(mip);
+}
+
+void get_lane_no() 
+{
+    fstream fs;
+
+    fs.open(Lane_No_File_Name);
+
+    char temp[128];
+	
+	string temp_string;
+
+    getline(fs,temp_string);  //First line is comment
+	getline(fs,temp_string);  //Second line contains information
+
+
+    if(temp_string.size()!=0)
+    {
+		char tmp[128];
+		strcpy(tmp,temp_string.c_str());		
+		sscanf(tmp,"%d %d %d %d %d %d %d %d",&LaneNo[0],&LaneNo[1],&LaneNo[2],&LaneNo[3],&LaneNo[4],&LaneNo[5],&LaneNo[6],&LaneNo[7]);
+    }
+    else
+    {
+        sprintf(temp,"Reading Lane_No_File problem");
+        cout<<temp<<endl;
+        outputlog(temp);
+        exit(0);
+    }
+    for(int e=0;e<8;e++)
+    {
+		TotalLanes+=LaneNo[e];
+		cout<< "Phase"<< e+1<< "number of lane" << LaneNo[e]<<endl;
+	}
+		
+    fs.close();
+}
+
+void get_lane_phase_mapping(int PhaseOfEachApproach[4][2], int PhaseOfEachLane[48]) 
+{
+    fstream fs;
+    fs.open(Lane_Phase_File_Name);
+    char temp[128];
+	
+	string temp_string;
+
+    getline(fs,temp_string);  //First line is comment
+	getline(fs,temp_string);  //Second line contains information
+
+    if(temp_string.size()!=0)
+    {
+		char tmp[128];
+		strcpy(tmp,temp_string.c_str());		
+		sscanf(tmp,"%d %d %d %d %d %d %d %d",&PhaseOfEachApproach[0][0],&PhaseOfEachApproach[0][1],&PhaseOfEachApproach[1][0],&PhaseOfEachApproach[1][1],
+											 &PhaseOfEachApproach[2][0],&PhaseOfEachApproach[2][1],&PhaseOfEachApproach[3][0],&PhaseOfEachApproach[3][1]);
+    }
+    else
+    {
+        sprintf(temp,"Reading Lane_Phase_Mapping_File problem");
+        cout<<temp<<endl;
+        outputlog(temp);
+        exit(0);
+    }
+    int lane=0;
+	for(int j=0;j<4;j++)
+	{
+		//populating phase of each lane data structre
+		if (PhaseOfEachApproach[j][0]!=PhaseOfEachApproach[j][1]) // in the case that left turn and through are not the same phase
+		{
+			for (int i=0;i<LaneNo[PhaseOfEachApproach[j][0]-1];i++)
+			{
+				PhaseOfEachLane[lane]=PhaseOfEachApproach[j][0];
+				lane++;
+			}
+			for (int i=0;i<LaneNo[PhaseOfEachApproach[j][1]-1];i++)
+			{
+				PhaseOfEachLane[lane]=PhaseOfEachApproach[j][1];
+				lane++;
+			}
+		}
+		else 
+		{
+			for (int i=0;i<LaneNo[PhaseOfEachApproach[j][0]-1];i++)
+			{
+				PhaseOfEachLane[lane]=PhaseOfEachApproach[j][0];
+				lane++;
+			}	
+		}
+	}
+	for(int j=0;j<4;j++)
+	{
+		lane=0;
+		//populating LaneNo2 data structure to be used in calculateQ function
+		if (PhaseOfEachApproach[j][0]!=PhaseOfEachApproach[j][1]) // in the case that left turn and through are not the same phase
+		{
+			LaneNo2[PhaseOfEachApproach[j][0]-1]=LaneNo[PhaseOfEachApproach[j][0]-1]; // LaneNo2 will record the total number of lanes per approach
+			LaneNo2[PhaseOfEachApproach[j][1]-1]=LaneNo[PhaseOfEachApproach[j][0]-1]+LaneNo[PhaseOfEachApproach[j][1]-1]; 
+		}
+		else
+		{
+			LaneNo2[PhaseOfEachApproach[j][0]-1]=LaneNo[PhaseOfEachApproach[j][0]-1]; // LaneNo2 will record the total number of lanes per approach
+		}
+		
+	}
+	for (int jj=0;jj<TotalLanes;jj++)
+		cout<<"lane "<< jj+1 <<" phase"<<PhaseOfEachLane[jj]<<endl;
+	for (int jj=0;jj<8;jj++)	
+		cout<<"phase "<< jj+1 <<" lane num per approach"<<LaneNo2[jj]<<endl;
+    fs.close();
+}
+
+
+
+
+void calculateQ(int PhaseOfEachApproach[4][2],int PhaseOfEachLane[48],double dQsizeOfEachLane[48])
+{
+	ConnectedVehicle temp_CV;
+	int templane=0;
+	int tempapproach=0;
+	int iMaxVehInQ=0;
+	double dSizeOfQ=0.0;
+	double dEndofQ=0.0;
+	double dBeginingofQ=10000.0;
+	int templ=0;
+//	double dRecTime=GetSeconds();
+	for (int e;e<8;e++)
+	{
+		for (int ee;ee<6;ee++)
+		{
+			NoVehInQ[e][ee]=0;
+			QSize[e][ee]=0;
+		}
+	
+	}
+	for (int p=0;p<TotalLanes;p++)
+		dQsizeOfEachLane[p]=0;
+		
+	for (int e=0;e<8;e++)
+	{
+		//Assign vehicles to the list of each lane of each phase. First of all, vehicles clusters by their phases and then cluster by each lane in the phase.
+		trackedveh.Reset();
+		vehlist_phase.ClearList();
+		while(!trackedveh.EndOfList())  
+		{
+			if (trackedveh.Data().req_phase==e+1) //For each phase in hte list of vehicles
+			{
+				
+				//{ cout<< "ID "<< trackedveh.Data().TempID<<"Lane "<< trackedveh.Data().lane<< "phase "<< trackedveh.Data().req_phase <<  "speed "<< trackedveh.Data().Speed<<"Dist "<<trackedveh.Data().stopBarDistance<< endl; }
+				//if (trackedveh.Data().time_stop>0)
+					
+				temp_CV=trackedveh.Data();
+				vehlist_phase.InsertRear(temp_CV);
+			}
+			
+			//if (trackedveh.Data().req_phase>0) //Requested phase  
+			//{
+				//if(trackedveh.Data().Speed>1)
+				//{
+					//int ETA= int (trackedveh.Data().stopBarDistance/trackedveh.Data().Speed) ; //ceil(trackedveh.Data().stopBarDistance/trackedveh.Data().Speed);
+					//if (ETA<50)
+						//ArrivalTable[ETA][trackedveh.Data().req_phase-1]++;
+				//}
+				//else
+					//ArrivalTable[0][trackedveh.Data().req_phase-1]++;
+				
+			//}
+			trackedveh.Next();
+		}
+		// TEMPORARY!!!!!!!!!!!!!!!!!!!!!!!!!! // !!! check the total lines if we want to use the code for other intersections
+		templ=0;
+		if ((e+1)==1)
+			templ=LaneNo[5];
+		if ((e+1)==3)
+			templ=LaneNo[7];
+		if ((e+1)==5)
+			templ=LaneNo[1];
+		if ((e+1)==7)
+			templ=LaneNo[3];
+		//if (((e+1)==8)||((e+1)==2)||((e+1)==6))
+			//templ=1;
+			
+			
+		for (int ee=templ;ee<LaneNo[e]+templ;ee++)
+		{
+			vehlist_phase.Reset();
+			vehlist_lane.ClearList();
+			while(!vehlist_phase.EndOfList())  //Record the vehicles of each lane from each phase
+			{
+				//cout<<"PHAASE"<<vehlist_phase.Data().req_phase<<" LANEEEEE"<<	vehlist_phase.Data().lane<<endl; 
+				if (vehlist_phase.Data().lane==ee+1) 
+				{
+					temp_CV=vehlist_phase.Data();
+					vehlist_lane.InsertRear(temp_CV);
+				}
+				vehlist_phase.Next();
+			}
+			templane=0;
+			tempapproach=0;
+			iMaxVehInQ=0;
+			dSizeOfQ=0.0;
+			dEndofQ=0.0;
+			dBeginingofQ=10000.0;
+			vehlist_lane.Reset();
+			while(!vehlist_lane.EndOfList())  // find the q length
+			{
+				//calculate queue size
+				if (vehlist_lane.Data().Speed<1) 
+				{
+					iMaxVehInQ++;
+					dEndofQ=max(dEndofQ,vehlist_lane.Data().stopBarDistance);
+					dBeginingofQ=min(dBeginingofQ,vehlist_lane.Data().stopBarDistance);
+					templane=vehlist_lane.Data().lane;
+					tempapproach=vehlist_lane.Data().approach;
+				}
+				vehlist_lane.Next();
+			}
+			if (iMaxVehInQ==0) // no vehicle is in q
+				dSizeOfQ=0.0;
+			//else if (dEndofQ==dBeginingofQ) // only one vehicle in Q
+				//dSizeOfQ=dEndofQ;
+			else
+			{
+				if ((dBeginingofQ==dEndofQ) && (dEndofQ<3) ) //only one car in the queue and the car is the first car in the queue
+					dSizeOfQ=3.5;
+				else if (dBeginingofQ==dEndofQ) // only one connected car in the queue and there is a queue of non-connected cars infront of it
+					dSizeOfQ=dEndofQ+3.5;
+				else
+					dSizeOfQ=dEndofQ-dBeginingofQ; 
+			}
+				
+			NoVehInQ[e][ee]=iMaxVehInQ;
+			QSize[e][ee]=dSizeOfQ;
+		//		cout<<"Qsize phase "<<e+1<<"lane "<<ee+1<<  "  size "<<QSize[e][ee]<<endl;
+			if (templane>1) // !!! check the total lines if we want to use the code for other intersections
+			{
+				if ((e+1==4)||(e+1==7))
+					dQsizeOfEachLane[templane-1]=dSizeOfQ;
+				else if ((e+1==1)||(e+1==6))
+					dQsizeOfEachLane[templane+3-1]=dSizeOfQ;
+				else if ((e+1==3)||(e+1==8))
+					dQsizeOfEachLane[templane+3+5-1]=dSizeOfQ;
+			 	else if ((e+1==2)||(e+1==5))
+					dQsizeOfEachLane[templane+3+5+4-1]=dSizeOfQ;
+			}
+		
+			//cout<<"Qsize"<<QSize[e][ee]<<endl;
+			
+			//cout<< "TEMPLATE LANE"<<templane<<endl;
+			//if ((templane>0) && (e+1==PhaseOfEachApproach[(int)(tempapproach-1)/2][0]))
+			//{
+				//for (int cn=(int)(tempapproach-1)/2 ;cn>0;cn--)
+				//{
+					//if (PhaseOfEachApproach[cn][0]!=PhaseOfEachApproach[cn][1])
+					//{
+						//templane=LaneNo[PhaseOfEachApproach[cn][0]]+LaneNo[PhaseOfEachApproach[cn][1]]+templane;
+					//}else
+						//templane=LaneNo[PhaseOfEachApproach[cn][0]]+templane;
+				//}
+				//dQsizeOfEachLane[templane]=dSizeOfQ;
+			//}
+			//cout<<" LANE NUBMER" <<templane<< " SIZE " <<dQsizeOfEachLane[templane]<<endl;
+			
+		}
+	}
+	//for (int g=0;g<TotalLanes;g++) // !!! check the total lines if we want to use the code for other intersections
+	//	cout<<"line"<<g+1<<" size "<<dQsizeOfEachLane[g]<<endl;
+		
+}
+void extractOptModInputFromTraj(double dVehDistToStpBar[130],double dVehSpd[130],int iVehPhase[130],double Ratio[130],double indic[130],int laneNumber[130],double dQsizeOfEachLane[48],double Tq[130], int PhaseOfEachApproach[4][2],int PhaseOfEachLane[48],int InitPhase[2],double GrnElapse[2])
+{
+		trackedveh.Reset();
+		int VehCnt=0;
+		currentTotalVeh=0;
+		for (int it=0;it<130;it++)
+		{	
+			dVehDistToStpBar[it]=0;
+			dVehSpd[it]=0;
+			iVehPhase[it]=0;
+			Ratio[it]=0; 
+			indic[it]=0; 
+		}
+		for (int it=0;it<TotalLanes;it++)
+			bLaneSignalState[it]=0;
+		
+		while((!trackedveh.EndOfList() && VehCnt<130))  
+		{
+			
+			if (trackedveh.Data().req_phase>0) 
+			{
+				if (trackedveh.Data().time_stop>0)
+					Tq[VehCnt]=GetSeconds()-trackedveh.Data().time_stop;
+				else
+					Tq[VehCnt]=0.0;
+				dVehDistToStpBar[VehCnt]=trackedveh.Data().stopBarDistance;
+				if (trackedveh.Data().Speed>1)
+					dVehSpd[VehCnt]=trackedveh.Data().Speed;
+				else
+					dVehSpd[VehCnt]=1;
+				iVehPhase[VehCnt]=trackedveh.Data().req_phase;
+				//cout<<"iVehPhase[VehCnt]"<<iVehPhase[VehCnt]<<endl;
+				// obtaining the lane
+				int temp= (int) (trackedveh.Data().approach-1)/2-1;
+				int lane=0;
+				for (int j=temp;j>0;j--)
+				{
+					
+					lane =lane+LaneNo[PhaseOfEachApproach[j][0]];
+					lane =lane+LaneNo[PhaseOfEachApproach[j][1]];
+					
+				}
+				laneNumber[VehCnt]=lane+trackedveh.Data().lane;
+				if ((0<laneNumber[VehCnt]) && (laneNumber[VehCnt]<=TotalLanes))
+				{
+					
+					Ratio[VehCnt]=max(0.0, (dVehDistToStpBar[VehCnt]-dQsizeOfEachLane[laneNumber[VehCnt]])/(dQueuingSpd+dVehSpd[VehCnt]));
+					indic[VehCnt]=Ratio[VehCnt]-dQsizeOfEachLane[laneNumber[VehCnt]]/(dQDischargingSpd-dQueuingSpd);
+				}
+				VehCnt++;
+				currentTotalVeh++;
+			}
+			trackedveh.Next();
+		}
+		
+		if (GrnElapse[0]>0)
+		{
+			for (int i=0;i<TotalLanes;i++)
+			{
+				if (PhaseOfEachLane[i]==InitPhase[0])
+					bLaneSignalState[i]=1;
+			}
+		}
+		
+		
+		if (GrnElapse[1]>0)
+		{
+			for (int i=0;i<TotalLanes;i++)
+			{
+				if (PhaseOfEachLane[i]==InitPhase[1])
+					bLaneSignalState[i]=1;
+					//cout<<"	bLaneSignalState[i]"<<bLaneSignalState[i]<<endl;
+			}
+		}
+		
+}
+
+
+
+
+int GetSignalColor(int PhaseStatusNo)
+{
+    int ColorValue=RED;
+
+    switch (PhaseStatusNo)
+    {
+    case 2:
+    case 3:
+    case 4:
+    case 5:
+        ColorValue=RED;
+        break;
+    case 6:
+    case 11:
+        ColorValue=YELLOW;
+        break;
+    case 7:
+    case 8:
+        ColorValue=GREEN;
+        break;
+    default:
+        ColorValue=0;
+    }
+    return ColorValue;
+}
+
+// WILL use the global parameter phase_read
+void PhaseTimingStatusRead()
+{
+	char tlog[256];
+	sprintf(tlog,"Controller IP is  %s ",INTip);
+	cout<<tlog<<endl;
+    netsnmp_session session, *ss;
+    netsnmp_pdu *pdu;
+    netsnmp_pdu *response;
+
+    oid anOID[MAX_OID_LEN];
+    size_t anOID_len;
+
+    netsnmp_variable_list *vars;
+    int status;
+    
+
+    init_snmp("ASC");   //Initialize the SNMP library
+
+    snmp_sess_init( &session );  //Initialize a "session" that defines who we're going to talk to
+    /* set up defaults */
+    //char *ip = m_rampmeterip.GetBuffer(m_rampmeterip.GetLength());
+    //char *port = m_rampmeterport.GetBuffer(m_rampmeterport.GetLength());
+    char ipwithport[64];
+    strcpy(ipwithport,INTip);
+    strcat(ipwithport,":");
+    strcat(ipwithport,INTport); //for ASC get status, DO NOT USE port!!!
+    session.peername = strdup(ipwithport);
+    session.version = SNMP_VERSION_1; //for ASC intersection  /* set the SNMP version number */
+    /* set the SNMPv1 community name used for authentication */
+    session.community = (u_char *)"public";
+    session.community_len = strlen((const char *)session.community);
+
+    SOCK_STARTUP;
+    ss = snmp_open(&session);                     /* establish the session */
+
+    if (!ss)
+    {
+        snmp_sess_perror("ASC", &session);
+        SOCK_CLEANUP;
+        exit(1);
+    }
+
+    /*
+    * Create the PDU for the data for our request.
+    *   1) We're going to GET the system.sysDescr.0 node.
+    */
+    pdu = snmp_pdu_create(SNMP_MSG_GET);
+    anOID_len = MAX_OID_LEN;
+
+    //---#define CUR_TIMING_PLAN     "1.3.6.1.4.1.1206.3.5.2.1.22.0"      // return the current timing plan
+
+    char ctemp[50];
+
+    for(int i=1;i<=8;i++)
+    {
+        sprintf(ctemp,"%s%d",PHASE_STA_TIME2_ASC,i);
+
+        if (!snmp_parse_oid(ctemp, anOID, &anOID_len)) // Phase sequence in the controller: last bit as enabled or not: "1"  enable; "0" not used
+        {
+            snmp_perror(ctemp);
+            SOCK_CLEANUP;
+            exit(1);
+        }
+
+        snmp_add_null_var(pdu, anOID, anOID_len);
+
+    }
+
+
+    /*
+    * Send the Request out.
+    */
+    status = snmp_synch_response(ss, pdu, &response);
+
+    /*
+    * Process the response.
+    */
+    if (status == STAT_SUCCESS && response->errstat == SNMP_ERR_NOERROR)
+    {
+        /*
+        * SUCCESS: Print the result variables
+        */
+        int *out = new int[MAX_ITEMS];
+        int i =0;
+        //~ for(vars = response->variables; vars; vars = vars->next_variable)
+            //~ print_variable(vars->name, vars->name_length, vars);
+
+        /* manipuate the information ourselves */
+        for(vars = response->variables; vars; vars = vars->next_variable)
+        {
+            if (vars->type == ASN_OCTET_STR)
+            {
+                char *sp = (char *)malloc(1 + vars->val_len);
+                memcpy(sp, vars->val.string, vars->val_len);
+                sp[vars->val_len] = '\0';
+                //printf("value #%d is a string: %s\n", count++, sp);
+                free(sp);
+            }
+            else
+            {
+
+                int *aa;
+                aa =(int *)vars->val.integer;
+                out[i++] = * aa;
+                //printf("value #%d is NOT a string! Ack!. Value = %d \n", count++,*aa);
+            }
+        }
+        //****** GET the results from controller *************//
+        for(int i=0;i<8;i++)
+        {
+            phase_read.phaseColor[i]=GetSignalColor(out[i]);
+
+            CurPhaseStatus[i]=out[i];   // NOT converted to GYR
+            
+            //if(out[i]==3)       PhaseDisabled[i]=1;  // Phase i is not enabled.
+        }
+
+
+    }
+    else
+    {
+        if (status == STAT_SUCCESS)
+            fprintf(stderr, "Error in packet\nReason: %s\n",
+            snmp_errstring(response->errstat));
+        else if (status == STAT_TIMEOUT)
+            fprintf(stderr, "Timeout: No response from %s.\n",
+            session.peername);
+        else
+            snmp_sess_perror("snmpdemoapp", ss);
+
+    }
+
+    /*
+    * Clean up:    *  1) free the response.   *  2) close the session.
+    */
+    if (response)        snmp_free_pdu(response);
+
+    snmp_close(ss);
+
+    SOCK_CLEANUP;
+
+}
+
+int  CurTimingPlanRead()
+{
+    // USING the standard oid : ONLY read timing plan 1.
+    netsnmp_session session, *ss;
+    netsnmp_pdu *pdu;
+    netsnmp_pdu *response;
+
+    oid anOID[MAX_OID_LEN];
+    size_t anOID_len;
+
+    netsnmp_variable_list *vars;
+    int status;
+   
+    int currentTimePlan; // return value
+
+    init_snmp("RSU");   //Initialize the SNMP library
+
+    snmp_sess_init( &session );  //Initialize a "session" that defines who we're going to talk to
+    /* set up defaults */
+    //char *ip = m_rampmeterip.GetBuffer(m_rampmeterip.GetLength());
+    //char *port = m_rampmeterport.GetBuffer(m_rampmeterport.GetLength());
+    char ipwithport[64];
+    strcpy(ipwithport,INTip);
+    strcat(ipwithport,":");
+    strcat(ipwithport,INTport); //for ASC get status, DO NOT USE port!!!
+    session.peername = strdup(ipwithport);
+    session.version = SNMP_VERSION_1; //for ASC intersection  /* set the SNMP version number */
+    /* set the SNMPv1 community name used for authentication */
+    session.community = (u_char *)"public";
+    session.community_len = strlen((const char *)session.community);
+
+    SOCK_STARTUP;
+    ss = snmp_open(&session);                     /* establish the session */
+
+    if (!ss)
+    {
+        snmp_sess_perror("RSU", &session);
+        SOCK_CLEANUP;
+        exit(1);
+    }
+
+    /*
+    * Create the PDU for the data for our request.
+    *   1) We're going to GET the system.sysDescr.0 node.
+    */
+    pdu = snmp_pdu_create(SNMP_MSG_GET);
+    anOID_len = MAX_OID_LEN;
+
+    //---#define CUR_TIMING_PLAN     "1.3.6.1.4.1.1206.3.5.2.1.22.0"      // return the current timing plan
+
+    char ctemp[50];
+
+    sprintf(ctemp,"%s",CUR_TIMING_PLAN);   // WORK
+    // sprintf(ctemp,"%s",PHASE_MIN_GRN_ASC_TEST); // WORK
+    // sprintf(ctemp,"%s%d.%d",PHASE_MIN_GRN_ASC,2,1);        //  WORK
+
+    if (!snmp_parse_oid(ctemp, anOID, &anOID_len)) // Phase sequence in the controller: last bit as enabled or not: "1"  enable; "0" not used
+    {
+        snmp_perror(ctemp);
+        SOCK_CLEANUP;
+        exit(1);
+    }
+
+    snmp_add_null_var(pdu, anOID, anOID_len);
+
+
+    /*
+    * Send the Request out.
+    */
+    status = snmp_synch_response(ss, pdu, &response);
+
+    /*
+    * Process the response.
+    */
+    if (status == STAT_SUCCESS && response->errstat == SNMP_ERR_NOERROR)
+    {
+        /*
+        * SUCCESS: Print the result variables
+        */
+        int *out = new int[MAX_ITEMS];
+        int i =0;
+        //~ for(vars = response->variables; vars; vars = vars->next_variable)
+            //~ print_variable(vars->name, vars->name_length, vars);
+
+        /* manipuate the information ourselves */
+        for(vars = response->variables; vars; vars = vars->next_variable)
+        {
+            if (vars->type == ASN_OCTET_STR)
+            {
+                char *sp = (char *)malloc(1 + vars->val_len);
+                memcpy(sp, vars->val.string, vars->val_len);
+                sp[vars->val_len] = '\0';
+                //printf("value #%d is a string: %s\n", count++, sp);
+                free(sp);
+            }
+            else
+            {
+
+                int *aa;
+                aa =(int *)vars->val.integer;
+                out[i++] = * aa;
+                //printf("value #%d is NOT a string! Ack!. Value = %d \n", count++,*aa);
+            }
+        }
+
+        //CUR_TIMING_PLAN_NO=out[0];
+        currentTimePlan=out[0];
+
+    }
+    else
+    {
+        if (status == STAT_SUCCESS)
+            fprintf(stderr, "Error in packet\nReason: %s\n",
+            snmp_errstring(response->errstat));
+        else if (status == STAT_TIMEOUT)
+            fprintf(stderr, "Timeout: No response from %s.\n",
+            session.peername);
+        else
+            snmp_sess_perror("snmpdemoapp", ss);
+
+    }
+
+    /*
+    * Clean up:    *  1) free the response.   *  2) close the session.
+    */
+    if (response)        snmp_free_pdu(response);
+
+    snmp_close(ss);
+
+    SOCK_CLEANUP;
+
+    return currentTimePlan;
+
+}
+
+
+void IntersectionConfigRead(int CurTimingPlanNo,char *ConfigOutFile)
+{
+
+    netsnmp_session session, *ss;
+    netsnmp_pdu *pdu;
+    netsnmp_pdu *response;
+
+    oid anOID[MAX_OID_LEN];
+    size_t anOID_len;
+
+    netsnmp_variable_list *vars;
+    int status;
+    
+    /*
+    * Initialize the SNMP library
+    */
+    init_snmp("RSU");
+
+    /*
+    * Initialize a "session" that defines who we're going to talk to
+    */
+    snmp_sess_init( &session );                   /* set up defaults */
+    //char *ip = m_rampmeterip.GetBuffer(m_rampmeterip.GetLength());
+    //char *port = m_rampmeterport.GetBuffer(m_rampmeterport.GetLength());
+    char ipwithport[64];
+    strcpy(ipwithport,INTip);
+ 
+    strcat(ipwithport,":");
+    strcat(ipwithport,INTport); //for ASC get status, DO NOT USE port!!!
+    session.peername = strdup(ipwithport);
+    /* set the SNMP version number */
+    session.version = SNMP_VERSION_1; //for ASC intersection
+    //session.version = SNMP_VERSION_1; //for Rampmeter
+
+    /* set the SNMPv1 community name used for authentication */
+    session.community = (u_char *)"public";
+    session.community_len = strlen((const char *)session.community);
+
+    SOCK_STARTUP;
+    ss = snmp_open(&session);                     /* establish the session */
+
+    if (!ss)
+    {
+        snmp_sess_perror("RSU", &session);
+        SOCK_CLEANUP;
+        exit(1);
+    }
+
+    /*
+    * Create the PDU for the data for our request.
+    *   1) We're going to GET the system.sysDescr.0 node.
+    */
+    pdu = snmp_pdu_create(SNMP_MSG_GET);
+    anOID_len = MAX_OID_LEN;
+
+    //// Phase options: last ".X" is phase, the last bit of return result is "0", the phase is not enabled.
+    //#define PHASE_ENABLED       "1.3.6.1.4.1.1206.4.2.1.1.2.1.21."
+    ////------The following from ASC3------------//
+    //#define PHASE_MIN_GRN_ASC 	"1.3.6.1.4.1.1206.3.5.2.1.2.1.9."   // need last "x.p" x is the timing plan number,p is the phase number: x get from CUR_TIMING_PLAN
+    //#define PHASE_MAX_GRN_ASC 	"1.3.6.1.4.1.1206.3.5.2.1.2.1.15."
+    //#define PHASE_RED_CLR_ASC 	"1.3.6.1.4.1.1206.3.5.2.1.2.1.19."
+    //#define PHASE_YLW_XGE_ASC 	"1.3.6.1.4.1.1206.3.5.2.1.2.1.18."
+    char ctemp[50];
+
+    for(int i=1;i<=8;i++) //PHASE_MIN_GRN_ASC
+    {
+        sprintf(ctemp,"%s%d.%d",PHASE_MIN_GRN_ASC,CurTimingPlanNo,i);        //  in seconds
+
+        if (!snmp_parse_oid(ctemp, anOID, &anOID_len))
+        {
+            snmp_perror(ctemp);
+            SOCK_CLEANUP;
+            exit(1);
+        }
+
+        snmp_add_null_var(pdu, anOID, anOID_len);
+
+    }
+
+    for(int i=1;i<=8;i++)  //PHASE_YLW_XGE_ASC
+    {
+        sprintf(ctemp,"%s%d.%d",PHASE_YLW_XGE_ASC,CurTimingPlanNo,i);    // in tenth of seconds, for example if 35 should be 3.5 seconds
+
+        if (!snmp_parse_oid(ctemp, anOID, &anOID_len))
+        {
+            snmp_perror(ctemp);
+            SOCK_CLEANUP;
+            exit(1);
+        }
+
+        snmp_add_null_var(pdu, anOID, anOID_len);
+
+    }
+
+    for(int i=1;i<=8;i++) //PHASE_RED_CLR_ASC
+    {
+        sprintf(ctemp,"%s%d.%d",PHASE_RED_CLR_ASC,CurTimingPlanNo,i);   // in tenth of seconds, for example if 35 should be 3.5 seconds
+
+        if (!snmp_parse_oid(ctemp, anOID, &anOID_len))
+        {
+            snmp_perror(ctemp);
+            SOCK_CLEANUP;
+            exit(1);
+        }
+
+        snmp_add_null_var(pdu, anOID, anOID_len);
+
+    }
+
+    for(int i=1;i<=8;i++) // PHASE_MAX_GRN_ASC
+    {
+        sprintf(ctemp,"%s%d.%d",PHASE_MAX_GRN_ASC,CurTimingPlanNo,i);  // in seconds
+
+        if (!snmp_parse_oid(ctemp, anOID, &anOID_len))
+        {
+            snmp_perror(ctemp);
+            SOCK_CLEANUP;
+            exit(1);
+        }
+
+        snmp_add_null_var(pdu, anOID, anOID_len);
+
+    }
+    for(int i=1;i<=8;i++)
+    {
+        sprintf(ctemp,"%s%d",PHASE_ENABLED,i);
+
+        if (!snmp_parse_oid(ctemp, anOID, &anOID_len)) // Phase sequence in the controller: last bit as enabled or not: "1"  enable; "0" not used
+        {
+            snmp_perror(ctemp);
+            SOCK_CLEANUP;
+            exit(1);
+        }
+
+        snmp_add_null_var(pdu, anOID, anOID_len);
+
+    }
+
+    /*
+    * Send the Request out.
+    */
+    status = snmp_synch_response(ss, pdu, &response);
+
+    /*
+    * Process the response.
+    */
+    if (status == STAT_SUCCESS && response->errstat == SNMP_ERR_NOERROR)
+    {
+        /*
+        * SUCCESS: Print the result variables
+        */
+        int *out = new int[MAX_ITEMS];
+        int i =0;
+        //~ for(vars = response->variables; vars; vars = vars->next_variable)
+            //~ print_variable(vars->name, vars->name_length, vars);
+
+        /* manipuate the information ourselves */
+        for(vars = response->variables; vars; vars = vars->next_variable)
+        {
+            if (vars->type == ASN_OCTET_STR)
+            {
+                char *sp = (char *)malloc(1 + vars->val_len);
+                memcpy(sp, vars->val.string, vars->val_len);
+                sp[vars->val_len] = '\0';
+                //printf("value #%d is a string: %s\n", count++, sp);
+                free(sp);
+            }
+            else
+            {
+
+                int *aa;
+                aa =(int *)vars->val.integer;
+                out[i++] = * aa;
+                //printf("value #%d is NOT a string! Ack!. Value = %d \n", count++,*aa);
+            }
+        }
+        //FOR ASC INTERSECTIONS_ Draw the lights
+        //UpdateIntersectionStatus(out[0],out[1]);
+        //cout<<"Minimum Green Time for Phase 1 is:\t"<<out[0]<<" ****** "<<out[1]<<endl;
+        // *** int PhaseSeq[8],MinGrn[8],Yellow[8],RedClr[8],GrnMax[8];***//
+
+        int Result[5][8];  //*** Sequence: MinGrn[8],Yellow[8],RedClr[8],GrnMax[8],PhaseSeq[8],;***//
+        /*
+        Result[0][8]  ----> MinGrn[8]
+        Result[1][8]  ----> Yellow[8]
+        Result[2][8]  ----> RedClr[8]
+        Result[3][8]  ----> GrnMax[8]
+        Result[4][8]  ----> PhaseSeq[8]
+        */
+        for(int i=0;i<5;i++)
+        {
+            for(int j=0;j<8;j++)
+            {
+                Result[i][j]=out[j+i*8];
+            }
+        }
+        int PhaseSeq[8],MinGrn[8],GrnMax[8];
+        float   Yellow[8],RedClr[8];
+
+        int TotalNo=0;
+
+        for(int i=0;i<8;i++)
+        {
+            //*** Last bit is 1, odd number, the '&' is 0:
+            if(Result[4][i] & 1)  //*** Be careful here: it is bit "&" not "&&". ***//
+            {
+                PhaseSeq[i]=i+1;
+
+                MinGrn[i]=Result[0][i];
+                Yellow[i]=float(Result[1][i]/10.0);
+                RedClr[i]=float(Result[2][i]/10.0);
+                GrnMax[i]=Result[3][i];
+
+                TotalNo++;
+            }
+
+            else
+            {
+                PhaseSeq[i]=0;
+                MinGrn[i]=0;
+                Yellow[i]=0;
+                RedClr[i]=0;
+                GrnMax[i]=0;
+            }
+        }
+
+        fstream fs_config;
+        //TODO:,char *ConfigOutFile
+        //fs_config.open(ConfigFile,ios::out);
+        fs_config.open(ConfigOutFile,ios::out);
+
+
+        fs_config<<"Phase_Num "<<TotalNo<<endl;
+
+        fs_config<<"Phase_Seq";
+        for(int i=0;i<8;i++) fs_config<<" "<<PhaseSeq[i];
+        fs_config<<endl;
+
+        fs_config<<"Gmin";
+        for(int i=0;i<8;i++) fs_config<<"\t"<<MinGrn[i];
+        fs_config<<endl;
+
+        fs_config<<"Yellow";
+        for(int i=0;i<8;i++) fs_config<<"\t"<<Yellow[i];
+        fs_config<<endl;
+
+        fs_config<<"Red";
+        for(int i=0;i<8;i++) fs_config<<"\t"<<RedClr[i];
+        fs_config<<endl;
+
+        fs_config<<"Gmax";
+        for(int i=0;i<8;i++) fs_config<<"\t"<<GrnMax[i];
+        fs_config<<endl;
+
+
+        fs_config.close();
+
+
+    }
+    else
+    {
+        /*
+        * FAILURE: print what went wrong!
+        */
+
+        if (status == STAT_SUCCESS)
+            fprintf(stderr, "Error in packet\nReason: %s\n",
+            snmp_errstring(response->errstat));
+        else if (status == STAT_TIMEOUT)
+            fprintf(stderr, "Timeout: No response from %s.\n",
+            session.peername);
+        else
+            snmp_sess_perror("snmpdemoapp", ss);
+
+    }
+
+    /*
+    * Clean up:
+    *  1) free the response.
+    *  2) close the session.
+    */
+    if (response)        snmp_free_pdu(response);
+
+    snmp_close(ss);
+
+    SOCK_CLEANUP;
+
+}
+
+void IntersectionPhaseControl(int phase_control, int Total,char YES)
+{
+    char tmp_log[64];
+    char tmp_int[16];
+   
+    netsnmp_session session, *ss;
+    netsnmp_pdu *pdu;
+    netsnmp_pdu *response;
+
+    oid anOID[MAX_OID_LEN];
+    size_t anOID_len;
+
+    netsnmp_variable_list *vars;
+    int status;
+    int count=1;
+    int  failures = 0;
+
+    //int number=pow(2.0,phaseNO-1);
+    int number=Total;
+
+    //itoa(number,buffer,2); // NOT WORKING
+
+    sprintf(tmp_int,"%d",number);
+    cout<<"CMD Applied to Phase: ";//<<buffer;
+    binary(Total);
+    cout<<"  "<<tmp_int<<"  "<<YES<<endl;
+
+    /*
+    * Initialize the SNMP library
+    */
+    init_snmp("RSU");
+
+    /*
+    * Initialize a "session" that defines who we're going to talk to
+    */
+    snmp_sess_init( &session );                   /* set up defaults */
+
+    char ipwithport[64];
+    strcpy(ipwithport,INTip);
+    strcat(ipwithport,":");
+    strcat(ipwithport,INTport);
+    session.peername = strdup(ipwithport);
+
+    /* set the SNMP version number */
+    session.version = SNMP_VERSION_1;
+
+    /* set the SNMPv1 community name used for authentication */
+    session.community = (u_char *)"public";
+    session.community_len = strlen((const char *)session.community);
+
+    SOCK_STARTUP;
+    ss = snmp_open(&session);                     /* establish the session */
+
+    if (!ss)
+    {
+        snmp_sess_perror("RSU", &session);
+        SOCK_CLEANUP;
+        exit(1);
+    }
+
+    /*
+    * Create the PDU for the data for our request.
+    *   1) We're going to SET the system.sysDescr.0 node.
+    */
+    pdu = snmp_pdu_create(SNMP_MSG_SET);
+    anOID_len = MAX_OID_LEN;
+    if (PHASE_HOLD==phase_control)
+    {
+        if (!snmp_parse_oid(MIB_PHASE_HOLD, anOID, &anOID_len))
+        {
+            snmp_perror(MIB_PHASE_HOLD);
+            failures++;
+        }
+        sprintf(tmp_log,"HOLD control! Number (%d), AT time:[%.2f] \n ",Total,GetSeconds());
+        std::cout <<tmp_log;       outputlog(tmp_log);
+
+    }
+    else if (PHASE_FORCEOFF==phase_control)
+    {
+        if (!snmp_parse_oid(MIB_PHASE_FORCEOFF, anOID, &anOID_len))
+        {
+            snmp_perror(MIB_PHASE_FORCEOFF);
+            failures++;
+        }
+        sprintf(tmp_log,"FORCEOFF control! Number (%d), AT time:[%.2f] \n ",Total,GetSeconds());
+        std::cout <<tmp_log;        outputlog(tmp_log);
+
+    }
+    else if (PHASE_OMIT==phase_control)
+    {
+        if (!snmp_parse_oid(MIB_PHASE_OMIT, anOID, &anOID_len))
+        {
+            snmp_perror(MIB_PHASE_OMIT);
+            failures++;
+        }
+        sprintf(tmp_log,"OMIT control! Number (%d), AT time:[%.2f] \n ",Total,GetSeconds());
+        std::cout <<tmp_log;        outputlog(tmp_log);
+    }
+    else if (PHASE_VEH_CALL==phase_control)
+    {
+        if (!snmp_parse_oid(MIB_PHASE_VEH_CALL, anOID, &anOID_len))
+        {
+            snmp_perror(MIB_PHASE_VEH_CALL);
+            failures++;
+        }
+        sprintf(tmp_log,"VEH CALL to ASC controller! Number (%d), AT time:%ld \n ",Total,time(NULL));
+        std::cout <<tmp_log;        outputlog(tmp_log);
+    }
+
+
+    //snmp_add_var() return 0 if success
+    if (snmp_add_var(pdu, anOID, anOID_len,'i', tmp_int))
+    {
+        switch(phase_control)
+        {
+        case PHASE_FORCEOFF:
+            snmp_perror(MIB_PHASE_FORCEOFF); break;
+        case PHASE_OMIT:
+            snmp_perror(MIB_PHASE_OMIT); break;
+        case PHASE_VEH_CALL:
+            snmp_perror(MIB_PHASE_VEH_CALL); break;
+        case PHASE_HOLD:
+            snmp_perror(MIB_PHASE_HOLD); break;
+        }
+
+        failures++;
+    }
+
+    if (failures)
+    {
+        snmp_close(ss);
+        SOCK_CLEANUP;
+        exit(1);
+    }
+
+    /*
+    * Send the Request out.
+    */
+    status = snmp_synch_response(ss, pdu, &response);
+
+    /*
+    * Process the response.
+    */
+    if (status == STAT_SUCCESS && response->errstat == SNMP_ERR_NOERROR)
+    {
+        //------SUCCESS: Print the result variables
+        int *out = new int[MAX_ITEMS];
+        int i =0;
+        //~ for(vars = response->variables; vars; vars = vars->next_variable)
+            //~ print_variable(vars->name, vars->name_length, vars);
+
+        /* manipuate the information ourselves */
+        for(vars = response->variables; vars; vars = vars->next_variable)
+        {
+            if (vars->type == ASN_OCTET_STR)
+            {
+                char *sp = (char *)malloc(1 + vars->val_len);
+                memcpy(sp, vars->val.string, vars->val_len);
+                sp[vars->val_len] = '\0';
+                printf("value #%d is a string: %s\n", count++, sp);
+                free(sp);
+            }
+            else
+            {
+                int *aa;
+                aa =(int *)vars->val.integer;
+                out[i++] = * aa;
+                printf("value #%d is NOT a string! Ack!\n", count++);
+            }
+        }
+    }
+    else
+    {
+        // FAILURE: print what went wrong!
+        if (status == STAT_SUCCESS)
+            fprintf(stderr, "Error in packet\nReason: %s\n",
+            snmp_errstring(response->errstat));
+        else if (status == STAT_TIMEOUT)
+            fprintf(stderr, "Timeout: No response from %s.\n",
+            session.peername);
+        else
+            snmp_sess_perror("snmpdemoapp", ss);
+    }
+    //------Clean up:1) free the response. 2) close the session.
+    if (response)
+        snmp_free_pdu(response);
+    snmp_close(ss);
+
+    SOCK_CLEANUP;
+
 }

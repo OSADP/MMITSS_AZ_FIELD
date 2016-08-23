@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<CodeBlocks_project_file>
+	<FileVersion major="1" minor="6" />
+	<Project>
+		<Option title="EVA_Library" />
+		<Option pch_mode="2" />
+		<Option compiler="gcc" />
+		<Build>
+			<Target title="Debug">
+				<Option output="bin/Debug/EVA_Library" prefix_auto="1" extension_auto="1" />
+				<Option working_dir="" />
+				<Option object_output="obj/Debug/" />
+				<Option type="2" />
+				<Option compiler="gcc" />
+				<Option createDefFile="1" />
+				<Compiler>
+					<Add option="-Wall" />
+					<Add option="-g" />
+					<Add directory="/home/bhanu92/Desktop/EVA_Library/" />
+				</Compiler>
+			</Target>
+			<Target title="Release">
+				<Option output="bin/Release/EVA_Library" prefix_auto="1" extension_auto="1" />
+				<Option working_dir="" />
+				<Option object_output="obj/Release/" />
+				<Option type="2" />
+				<Option compiler="gcc" />
+				<Option createDefFile="1" />
+				<Compiler>
+					<Add option="-Wall" />
+					<Add option="-O2" />
+				</Compiler>
+				<Linker>
+					<Add option="-s" />
+				</Linker>
+			</Target>
+		</Build>
+		<Unit filename="BIT_STRING.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="BIT_STRING.h" />
+		<Unit filename="DSRCmsgID.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="DSRCmsgID.h" />
+		<Unit filename="EmergencyVehicleAlert.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="EmergencyVehicleAlert.h" />
+		<Unit filename="INTEGER.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="INTEGER.h" />
+		<Unit filename="ITIScodes.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="ITIScodes.h" />
+		<Unit filename="MsgCRC.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="MsgCRC.h" />
+		<Unit filename="MsgCount.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="MsgCount.h" />
+		<Unit filename="NativeEnumerated.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="NativeEnumerated.h" />
+		<Unit filename="NativeInteger.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="NativeInteger.h" />
+		<Unit filename="OCTET_STRING.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="OCTET_STRING.h" />
+		<Unit filename="RoadSideAlert.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="RoadSideAlert.h" />
+		<Unit filename="ber_tlv_tag.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="ber_tlv_tag.h" />
+		<Unit filename="constr_SEQUENCE.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="constr_SEQUENCE.h" />
+		<Unit filename="constr_TYPE.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="constr_TYPE.h" />
+		<Unit filename="constraints.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="constraints.h" />
+		<Unit filename="converter-sample.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="converter-sample_populated.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="der_encoder.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="der_encoder.h" />
+		<Unit filename="per_decoder.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="per_decoder.h" />
+		<Unit filename="per_encoder.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="per_encoder.h" />
+		<Unit filename="per_opentype.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="per_opentype.h" />
+		<Unit filename="per_support.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="per_support.h" />
+		<Unit filename="xer_decoder.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="xer_decoder.h" />
+		<Unit filename="xer_encoder.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="xer_encoder.h" />
+		<Unit filename="xer_support.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="xer_support.h" />
+		<Extensions>
+			<code_completion />
+			<debugger />
+		</Extensions>
+	</Project>
+</CodeBlocks_project_file>

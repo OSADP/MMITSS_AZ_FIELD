@@ -1,0 +1,162 @@
+/*PDM ASN.1 Module Shayan */
+J2735PDMMESSAGE DEFINITIONS AUTOMATIC TAGS::=
+BEGIN
+
+	ProbeDataManagement ::= SEQUENCE {
+		msgID DSRCmsgID, -- This is a unique message
+				-- identifier, NOT related to
+				-- the PSID\PSC
+		sample Sample, -- identifies vehicle
+				-- population affected
+		directions HeadingSlice,
+				-- Applicable headings/directions
+		term CHOICE {
+			termtime TermTime, -- Terminate management process
+					   -- based on Time-to-Live
+			termDistance TermDistance -- Terminate management process
+						  -- based on Distance-to-Live
+		},
+		snapshot CHOICE {
+			snapshotTime SnapshotTime, -- Collect snapshots based on time
+			snapshotDistance SnapshotDistance -- Collect snapshots based on Distance
+		},
+		txInterval TxTime, -- Time Interval at which to send snapshots
+		cntTthreshold Count, -- number of thresholds that will be changed
+		dataElements SEQUENCE (SIZE(1..32)) OF
+			VehicleStatusRequest,
+					-- a data frame and its assoc thresholds
+	...
+	}
+
+DSRCmsgID ::= ENUMERATED {
+reserved (0),
+alaCarteMessage (1), -- ACM
+basicSafetyMessage (2), -- BSM, heartbeat msg
+basicSafetyMessageVerbose (3), -- used for testing only
+commonSafetyRequest (4), -- CSR
+emergencyVehicleAlert (5), -- EVA
+intersectionCollisionAlert (6), -- ICA
+mapData (7), -- MAP, GID, intersections
+nmeaCorrections (8), -- NMEA
+probeDataManagement (9), -- PDM
+probeVehicleData (10), -- PVD
+roadSideAlert (11), -- RSA
+rtcmCorrections (12), -- RTCM
+signalPhaseAndTimingMessage (13), -- SPAT
+signalRequestMessage (14), -- SRM
+signalStatusMessage (15), -- SSM
+travelerInformation (16), -- TIM
+... -- # LOCAL_CONTENT
+}
+
+
+Sample ::= SEQUENCE {
+sampleStart INTEGER(0..255), -- Sample Starting Point
+sampleEnd INTEGER(0..255) -- Sample Ending Point
+}
+
+
+HeadingSlice ::= OCTET STRING (SIZE(2))
+-- Each bit 22.5 degree starting from
+-- North and moving Eastward (clockwise)
+-- Define global enums for this entry
+noHeading HeadingSlice ::= '0000'H
+allHeadings HeadingSlice ::= 'FFFF'H
+from000-0to022-5degrees HeadingSlice ::= '0001'H
+from022-5to045-0degrees HeadingSlice ::= '0002'H
+from045-0to067-5degrees HeadingSlice ::= '0004'H
+from067-5to090-0degrees HeadingSlice ::= '0008'H
+from090-0to112-5degrees HeadingSlice ::= '0010'H
+from112-5to135-0degrees HeadingSlice ::= '0020'H
+from135-0to157-5degrees HeadingSlice ::= '0040'H
+from157-5to180-0degrees HeadingSlice ::= '0080'H
+from180-0to202-5degrees HeadingSlice ::= '0100'H
+from202-5to225-0degrees HeadingSlice ::= '0200'H
+from225-0to247-5degrees HeadingSlice ::= '0400'H
+from247-5to270-0degrees HeadingSlice ::= '0800'H
+from270-0to292-5degrees HeadingSlice ::= '1000'H
+from292-5to315-0degrees HeadingSlice ::= '2000'H
+from315-0to337-5degrees HeadingSlice ::= '4000'H
+from337-5to360-0degrees HeadingSlice ::= '8000'H
+
+
+TermTime ::= INTEGER (1..1800) -- units of sec
+
+
+TermDistance ::= INTEGER (1..30000) -- units in meters
+
+
+SnapshotTime ::= SEQUENCE {
+t1 INTEGER(1..99),
+-- m/sec - the instantaneous speed when the
+-- calculation is performed
+s1 INTEGER(0..50),
+-- seconds
+t2 INTEGER(1..99),
+-- m/sec - the instantaneous speed when the
+-- calculation is performed
+s2 INTEGER(0..50)
+-- seconds
+}
+
+
+SnapshotDistance ::= SEQUENCE {
+d1 INTEGER(0..999), -- meters
+s1 INTEGER(0..50), -- meters\second
+d2 INTEGER(0..999), -- meters
+s2 INTEGER(0..50) -- meters\second
+}
+
+
+TxTime ::= INTEGER (1..20) -- units of seconds
+
+
+Count ::= INTEGER (0..32)
+
+
+VehicleStatusRequest ::= SEQUENCE {
+dataType VehicleStatusDeviceTypeTag,
+subType INTEGER (1..15) OPTIONAL,
+sendOnLessThenValue INTEGER (-32767..32767) OPTIONAL,
+sendOnMoreThenValue INTEGER (-32767..32767) OPTIONAL,
+sendAll BOOLEAN OPTIONAL,
+...
+}
+
+
+VehicleStatusDeviceTypeTag ::= ENUMERATED {
+unknown (0),
+lights (1), -- Exterior Lights
+wipers (2), -- Wipers
+brakes (3), -- Brake Applied
+stab (4), -- Stability Control
+trac (5), -- Traction Control
+abs (6), -- Anti-Lock Brakes
+sunS (7), -- Sun Sensor
+rainS (8), -- Rain Sensor
+airTemp (9), -- Air Temperature
+steering (10),
+vertAccelThres (11), -- Wheel that Exceeded the
+vertAccel (12), -- Vertical g Force Value
+hozAccelLong (13), -- Longitudinal Acceleration
+hozAccelLat (14), -- Lateral Acceleration
+hozAccelCon (15), -- Acceleration Confidence
+accel4way (16),
+confidenceSet (17),
+obDist (18), -- Obstacle Distance
+obDirect (19), -- Obstacle Direction
+yaw (20), -- Yaw Rate
+yawRateCon (21), -- Yaw Rate Confidence
+dateTime (22), -- complete time
+fullPos (23), -- complete set of time and
+-- position, speed, heading
+position2D (24), -- lat, long
+position3D (25), -- lat, long, elevation
+vehicle (26), -- height, mass, type
+speedHeadC (27),
+speedC (28),
+... -- # LOCAL_CONTENT
+}
+
+
+END

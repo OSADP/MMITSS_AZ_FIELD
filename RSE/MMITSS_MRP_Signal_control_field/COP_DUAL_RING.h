@@ -1,23 +1,3 @@
-//**********************************************************************************
-//
-// © 2015 Arizona Board of Regents on behalf of the University of Arizona with rights
-//       granted for USDOT OSADP distribution with the Apache 2.0 open source license.
-//
-//**********************************************************************************
-
-
-
-/*  COP_DUAL_RING.h  
-*  Created by Yiheng Feng 
-*  University of Arizona   
-*  ATLAS Research Center 
-*  College of Engineering
-*
-*  This code was develop under the supervision of Professor Larry Head
-*  in the ATLAS Research Center.
-
-*/
-
 #include <stdio.h>
 #include <iostream>
 #include <math.h>
@@ -27,7 +7,7 @@ using namespace std;
 
 #define		J       2    /*  number of barriers/stages planned  */
 #define		P	8    /*  number of phases  */
-#define		T       130   /*  total planned time +1  */
+#define		T       120   /*  total planned time +1  */
 
 extern int MinGreen[8];
 extern int MaxGreen[8];
@@ -47,6 +27,9 @@ extern int LaneNo[8];
 extern int outputlog(char *output);
 
 extern int delay_type;
+
+extern int queue_warning_P1;
+extern int queue_warning_P5;
 
 extern double red_elapse_time[8];   //Red elapse time of each phase
 
@@ -112,19 +95,25 @@ outputlog(temp_log);cout<<temp_log;
 sprintf(temp_log,"Ped Phase needs to be considered: %d %d %d %d %d %d %d %d\n",Ped_Phase_Considered[0],Ped_Phase_Considered[1],Ped_Phase_Considered[2],Ped_Phase_Considered[3],Ped_Phase_Considered[4],Ped_Phase_Considered[5],Ped_Phase_Considered[6],Ped_Phase_Considered[7]);
 outputlog(temp_log);cout<<temp_log;
 
+//1. Decide which barrier we start from
+start_barrier=(InitPhase[0]<3)?0:1; 
+
+//Consider queue warning!!!!!!!
+if (start_barrier==0)  //first barrier
+{
+	if(queue_warning_P1==1)
+	MinGreen[0]=18;
+	if(queue_warning_P5==1)
+	MinGreen[4]=18;
+}
 //consider the Ped constraint, if the ped phase is on, or called, then when planning, MinGreen should be changed
 int MinGreen_Ped[8];   //This is the minimum green time considering the ped !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-int MaxGreen_Ped[8];   //This is the maximum green time considering the ped !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 for(i=0;i<8;i++)
 {
 	if (Ped_Phase_Considered[i]!=0)
-	{
 		MinGreen_Ped[i]= max(PedWalk[i]+PedClr[i],MinGreen[i]);
-	}
 	else
 		MinGreen_Ped[i]=MinGreen[i];
-		
-	MaxGreen_Ped[i]=max(MaxGreen[i],MinGreen_Ped[i]);
 }
 
 
@@ -164,8 +153,6 @@ for(i=0;i<J;i++)
 
 
 stage=0;
-//1. Decide which barrier we start from
-start_barrier=(InitPhase[0]<3)?0:1; 
 
 //2. Construct the first stage barrier
 
@@ -191,6 +178,7 @@ for (j=0;j<2;j++)
 //sprintf(temp_log,"The planned phases are: %d %d %d %d\n",planned_phase[0][0],planned_phase[0][1],planned_phase[1][0],planned_phase[1][1]);
 //outputlog(temp_log); cout<<temp_log;
 
+
 //2.2 Based on the planned pahse, calculate min and max for the barrier
 int ring1_min, ring2_min, ring1_max, ring2_max;
 ring1_min=0; ring2_min=0; ring1_max=0; ring2_max=0;
@@ -200,12 +188,12 @@ for(i=0;i<2;i++)  //ring 1
 	if(planned_phase[0][i]!=0 && planned_phase[0][i]!=InitPhase[0])  //not the current phase, but in plan
 	{
 		ring1_min+=MinGreen_Ped[planned_phase[0][i]-1]+Yellow[planned_phase[0][i]-1]+Red[planned_phase[0][i]-1];
-		ring1_max+=MaxGreen_Ped[planned_phase[0][i]-1]+Yellow[planned_phase[0][i]-1]+Red[planned_phase[0][i]-1];
+		ring1_max+=MaxGreen[planned_phase[0][i]-1]+Yellow[planned_phase[0][i]-1]+Red[planned_phase[0][i]-1];
 	}
 	if (planned_phase[0][i]!=0 && planned_phase[0][i]==InitPhase[0])  //the current phase in plan
 	{
 		ring1_min+=Yellow[planned_phase[0][i]-1]+Red[planned_phase[0][i]-1]+max(0,MinGreen_Ped[planned_phase[0][i]-1]-GrnElapse[0]);
-		ring1_max+=MaxGreen_Ped[planned_phase[0][i]-1]-GrnElapse[0]+Yellow[planned_phase[0][i]-1]+Red[planned_phase[0][i]-1];
+		ring1_max+=MaxGreen[planned_phase[0][i]-1]-GrnElapse[0]+Yellow[planned_phase[0][i]-1]+Red[planned_phase[0][i]-1];
 	}
 }
 for(i=0;i<2;i++)  //ring 2
@@ -213,12 +201,12 @@ for(i=0;i<2;i++)  //ring 2
 	if(planned_phase[1][i]!=0 && planned_phase[1][i]!=InitPhase[1])
 	{
 		ring2_min+=MinGreen_Ped[planned_phase[1][i]-1]+Yellow[planned_phase[1][i]-1]+Red[planned_phase[1][i]-1];
-		ring2_max+=MaxGreen_Ped[planned_phase[1][i]-1]+Yellow[planned_phase[1][i]-1]+Red[planned_phase[1][i]-1];
+		ring2_max+=MaxGreen[planned_phase[1][i]-1]+Yellow[planned_phase[1][i]-1]+Red[planned_phase[1][i]-1];
 	}
 	if(planned_phase[1][i]!=0 && planned_phase[1][i]==InitPhase[1])  //the current phase in plan
 	{
 		ring2_min+=Yellow[planned_phase[1][i]-1]+Red[planned_phase[1][i]-1]+max(0,MinGreen_Ped[planned_phase[1][i]-1]-GrnElapse[1]);
-		ring2_max+=MaxGreen_Ped[planned_phase[1][i]-1]-GrnElapse[1]+Yellow[planned_phase[1][i]-1]+Red[planned_phase[1][i]-1];
+		ring2_max+=MaxGreen[planned_phase[1][i]-1]-GrnElapse[1]+Yellow[planned_phase[1][i]-1]+Red[planned_phase[1][i]-1];
 	}
 }
 B_Min[stage]=max(ring1_min,ring2_min);
@@ -286,11 +274,11 @@ for(i=1;i<T;i++)
 				if(planned_phase[k][0]==InitPhase[k])
 				{
 					float delay_other_phase=f_other(k, planned_phase[k][0],planned_phase[k][1],i, Num_veh,Num_Veh_Ratio);   //calculate the delay of other phases in the same ring rather than planned phase
-					for(j=max(0,MinGreen_Ped[planned_phase[k][0]-1]-GrnElapse[k]);j<=MaxGreen_Ped[planned_phase[k][0]-1]-GrnElapse[k];j++)
+					for(j=max(0,MinGreen_Ped[planned_phase[k][0]-1]-GrnElapse[k]);j<=MaxGreen[planned_phase[k][0]-1]-GrnElapse[k];j++)
 					{
 						tempG[k][0]=j;
 						tempG[k][1]=effectiveG[k]-tempG[k][0];
-						if (tempG[k][1]>=MinGreen_Ped[planned_phase[k][1]-1] && tempG[k][1]<=MaxGreen_Ped[planned_phase[k][1]-1])  //feasible solution
+						if (tempG[k][1]>=MinGreen_Ped[planned_phase[k][1]-1] && tempG[k][1]<=MaxGreen[planned_phase[k][1]-1])  //feasible solution
 						{
 							//calculate delay function produced by this combination!!!!!!!!!!!!!!!!!!!!
 							float temp_vv=f(k,planned_phase[k][0],planned_phase[k][1],tempG[k][0],tempG[k][1],i,Num_veh,Num_Veh_Ratio)+delay_other_phase;
@@ -311,11 +299,11 @@ for(i=1;i<T;i++)
 				if(planned_phase[k][1]==InitPhase[k])
 				{
 					float delay_other_phase=f_other(k, planned_phase[k][1],planned_phase[k][0],i, Num_veh,Num_Veh_Ratio);   //calculate the delay of other phases in the same ring rather than planned phase
-					for(j=max(0,MinGreen_Ped[planned_phase[k][1]-1]-GrnElapse[k]);j<=MaxGreen_Ped[planned_phase[k][1]-1]-GrnElapse[k];j++)
+					for(j=max(0,MinGreen_Ped[planned_phase[k][1]-1]-GrnElapse[k]);j<=MaxGreen[planned_phase[k][1]-1]-GrnElapse[k];j++)
 					{
 						tempG[k][1]=j;
 						tempG[k][0]=effectiveG[k]-tempG[k][1];
-						if (tempG[k][0]>=MinGreen_Ped[planned_phase[k][0]-1] && tempG[k][0]<=MaxGreen_Ped[planned_phase[k][0]-1])  //feasible solution
+						if (tempG[k][0]>=MinGreen_Ped[planned_phase[k][0]-1] && tempG[k][0]<=MaxGreen[planned_phase[k][0]-1])  //feasible solution
 						{
 							//calculate delay function produced by this combination!!!!!!!!!!!!!!!!!!!!
 							float temp_vv=f(k,planned_phase[k][1],planned_phase[k][0],tempG[k][1],tempG[k][0],i,Num_veh,Num_Veh_Ratio)+delay_other_phase;
@@ -341,7 +329,7 @@ for(i=1;i<T;i++)
 				tempG[k][1]=0;
 				//cout<<"tempG[0][0] is "<<tempG[k][0]<<endl;
 				//cout<<"tempG[0][1] is "<<tempG[k][1]<<endl;
-				if (tempG[k][0]<=MaxGreen_Ped[planned_phase[k][0]-1])
+				if (tempG[k][0]<=MaxGreen[planned_phase[k][0]-1])
 				{
 					temp_v[k]=f_r(k,planned_phase[k][0],planned_phase[k][1],tempG[k][0],tempG[k][1],i,Num_veh,Num_Veh_Ratio);
 					//save the best phase schedule
@@ -360,7 +348,7 @@ for(i=1;i<T;i++)
 				tempG[k][1]=effectiveG[k];
 				//cout<<"tempG[0][0] is "<<tempG[k][0]<<endl;
 				//cout<<"tempG[0][1] is "<<tempG[k][1]<<endl;
-				if (tempG[k][1]<=MaxGreen_Ped[planned_phase[k][1]-1])
+				if (tempG[k][1]<=MaxGreen[planned_phase[k][1]-1])
 				{
 					temp_v[k]=f_r(k,planned_phase[k][0],planned_phase[k][1],tempG[k][0],tempG[k][1],i,Num_veh,Num_Veh_Ratio);
 					//save the best phase schedule
@@ -417,7 +405,7 @@ for(stage=1;stage<J;stage++)
 		if(planned_phase[0][i]!=0)
 		{
 			ring1_min+=MinGreen_Ped[planned_phase[0][i]-1]+Yellow[planned_phase[0][i]-1]+Red[planned_phase[0][i]-1];
-			ring1_max+=MaxGreen_Ped[planned_phase[0][i]-1]+Yellow[planned_phase[0][i]-1]+Red[planned_phase[0][i]-1];
+			ring1_max+=MaxGreen[planned_phase[0][i]-1]+Yellow[planned_phase[0][i]-1]+Red[planned_phase[0][i]-1];
 		}
 	}
 	for(i=0;i<2;i++)  //ring 2
@@ -425,7 +413,7 @@ for(stage=1;stage<J;stage++)
 		if(planned_phase[1][i]!=0)
 		{
 			ring2_min+=MinGreen_Ped[planned_phase[1][i]-1]+Yellow[planned_phase[1][i]-1]+Red[planned_phase[1][i]-1];
-			ring2_max+=MaxGreen_Ped[planned_phase[1][i]-1]+Yellow[planned_phase[1][i]-1]+Red[planned_phase[1][i]-1];
+			ring2_max+=MaxGreen[planned_phase[1][i]-1]+Yellow[planned_phase[1][i]-1]+Red[planned_phase[1][i]-1];
 		}
 	}
 	B_Min[stage]=max(ring1_min,ring2_min);
@@ -522,11 +510,11 @@ for(stage=1;stage<J;stage++)
 					if(planned_phase[k][0]!=0 && planned_phase[k][1]!=0)
 					{
 						float delay_other_phase=f1_other(k,planned_phase[k][0],planned_phase[k][1],i,s,stage,Num_veh,Num_Veh_Ratio);
-						for(j=MinGreen_Ped[planned_phase[k][0]-1];j<=MaxGreen_Ped[planned_phase[k][0]-1];j++)   //phase sequence 1
+						for(j=MinGreen_Ped[planned_phase[k][0]-1];j<=MaxGreen[planned_phase[k][0]-1];j++)   //phase sequence 1
 						{
 							tempG[k][0]=j;
 							tempG[k][1]=effectiveG[k]-tempG[k][0];
-							if (tempG[k][1]>=MinGreen_Ped[planned_phase[k][1]-1] && tempG[k][1]<=MaxGreen_Ped[planned_phase[k][1]-1])  //feasible solution
+							if (tempG[k][1]>=MinGreen_Ped[planned_phase[k][1]-1] && tempG[k][1]<=MaxGreen[planned_phase[k][1]-1])  //feasible solution
 							{
 								//get the residual queue
 								float temp_vv;
@@ -575,56 +563,56 @@ for(stage=1;stage<J;stage++)
 							}
 						}
 						
-						//~ for(j=MinGreen_Ped[planned_phase[k][1]-1];j<=MaxGreen_Ped[planned_phase[k][1]-1];j++)   //switch phase sequence
-						//~ {
-							//~ tempG[k][1]=j;
-							//~ tempG[k][0]=effectiveG[k]-tempG[k][1];
-							//~ if (tempG[k][0]>=MinGreen_Ped[planned_phase[k][0]-1] && tempG[k][0]<=MaxGreen_Ped[planned_phase[k][0]-1])  //feasible solution
-							//~ {
-							    //~ float temp_vv;
-								//~ int Q_temp_P1=Q_perm[stage-1][i-s][planned_phase[k][1]];
-								//~ int Q_temp_P2=Q_perm[stage-1][i-s][planned_phase[k][0]];
-								//~ int array_position=k*2560000+Q_temp_P1*64000+Q_temp_P2*1600+tempG[k][1]*40+tempG[k][0]-1;
-								//~ //cout<<perf_func_value_seq2[array_position]<<endl;
-								//~ if (Q_temp_P1<=40 && Q_temp_P2<=40 && tempG[k][0]<=40 && tempG[k][1]<=40 && i-s>30)   //make sure all the values are in the boundary of the matrix definition
-								//~ {					
-									//~ if (perf_func_value_seq2[array_position]<99999)  //already calculated
-									//~ {
-										//~ temp_vv=perf_func_value_seq2[array_position]+delay_other_phase;
-										//~ //count++;
-									//~ }
-									//~ else
-									//~ {
-										//~ int f1_value=f1(k,planned_phase[k][1],planned_phase[k][0],tempG[k][1],tempG[k][0],i,s,stage,Num_veh,Num_Veh_Ratio);
-										//~ temp_vv=f1_value+delay_other_phase;
-										//~ perf_func_value_seq2[array_position]=f1_value;
-									//~ }
-								//~ }
-								//~ else
-								//~ {
-									//~ temp_vv=f1(k,planned_phase[k][1],planned_phase[k][0],tempG[k][1],tempG[k][0],i,s,stage,Num_veh,Num_Veh_Ratio)+delay_other_phase;
-									//~ //perf_func_value_seq2[array_position]=temp_vv;
-								//~ }
-//~ 
-								//~ //float temp_vv=f1(k,planned_phase[k][1],planned_phase[k][0],tempG[k][1],tempG[k][0],i,s,stage,Num_veh,Num_Veh_Ratio)+delay_other_phase;
-//~ 
-								//~ if (temp_vv<temp_v[k]) //calculate the delay
-								//~ {
-									//~ temp_v[k]=temp_vv; //save the best delay
-									//~ //save the best phase schedule
-									//~ opt_schedule[k][0]=tempG[k][1];
-									//~ opt_schedule[k][1]=tempG[k][0];
-									//~ opt_seq[k][0]=planned_phase[k][1];
-									//~ opt_seq[k][1]=planned_phase[k][0];
-//~ 
-									//~ for (int kkk=4*k;kkk<4+4*k;kkk++)
-										//~ temp_Q_perm[kkk]=Q_temp[i][kkk];
-								//~ }
-								//~ //calculate delay function produced by this combination!!!!!!!!!!!!!!!!!!!!
-								//~ //cout<<"tempG[0][0] is "<<tempG[k][0]<<endl;
-								//~ //cout<<"tempG[0][1] is "<<tempG[k][1]<<endl;
-							//~ }
-						//~ } 
+						for(j=MinGreen_Ped[planned_phase[k][1]-1];j<=MaxGreen[planned_phase[k][1]-1];j++)   //switch phase sequence
+						{
+							tempG[k][1]=j;
+							tempG[k][0]=effectiveG[k]-tempG[k][1];
+							if (tempG[k][0]>=MinGreen_Ped[planned_phase[k][0]-1] && tempG[k][0]<=MaxGreen[planned_phase[k][0]-1])  //feasible solution
+							{
+							    float temp_vv;
+								int Q_temp_P1=Q_perm[stage-1][i-s][planned_phase[k][1]];
+								int Q_temp_P2=Q_perm[stage-1][i-s][planned_phase[k][0]];
+								int array_position=k*2560000+Q_temp_P1*64000+Q_temp_P2*1600+tempG[k][1]*40+tempG[k][0]-1;
+								//cout<<perf_func_value_seq2[array_position]<<endl;
+								if (Q_temp_P1<=40 && Q_temp_P2<=40 && tempG[k][0]<=40 && tempG[k][1]<=40 && i-s>30)   //make sure all the values are in the boundary of the matrix definition
+								{					
+									if (perf_func_value_seq2[array_position]<99999)  //already calculated
+									{
+										temp_vv=perf_func_value_seq2[array_position]+delay_other_phase;
+										//count++;
+									}
+									else
+									{
+										int f1_value=f1(k,planned_phase[k][1],planned_phase[k][0],tempG[k][1],tempG[k][0],i,s,stage,Num_veh,Num_Veh_Ratio);
+										temp_vv=f1_value+delay_other_phase;
+										perf_func_value_seq2[array_position]=f1_value;
+									}
+								}
+								else
+								{
+									temp_vv=f1(k,planned_phase[k][1],planned_phase[k][0],tempG[k][1],tempG[k][0],i,s,stage,Num_veh,Num_Veh_Ratio)+delay_other_phase;
+									//perf_func_value_seq2[array_position]=temp_vv;
+								}
+
+								//float temp_vv=f1(k,planned_phase[k][1],planned_phase[k][0],tempG[k][1],tempG[k][0],i,s,stage,Num_veh,Num_Veh_Ratio)+delay_other_phase;
+
+								if (temp_vv<temp_v[k]) //calculate the delay
+								{
+									temp_v[k]=temp_vv; //save the best delay
+									//save the best phase schedule
+									opt_schedule[k][0]=tempG[k][1];
+									opt_schedule[k][1]=tempG[k][0];
+									opt_seq[k][0]=planned_phase[k][1];
+									opt_seq[k][1]=planned_phase[k][0];
+
+									for (int kkk=4*k;kkk<4+4*k;kkk++)
+										temp_Q_perm[kkk]=Q_temp[i][kkk];
+								}
+								//calculate delay function produced by this combination!!!!!!!!!!!!!!!!!!!!
+								//cout<<"tempG[0][0] is "<<tempG[k][0]<<endl;
+								//cout<<"tempG[0][1] is "<<tempG[k][1]<<endl;
+							}
+						} 
 						
 					}
 					//case 2: first phase is not skipped, second phase is skipped
@@ -632,7 +620,7 @@ for(stage=1;stage<J;stage++)
 					{
 						tempG[k][0]=effectiveG[k];
 						tempG[k][1]=0;
-						if (tempG[k][0]<=MaxGreen_Ped[planned_phase[k][0]-1])
+						if (tempG[k][0]<=MaxGreen[planned_phase[k][0]-1])
 						{
 							temp_v[k]=f1_r(k,planned_phase[k][0],planned_phase[k][1],tempG[k][0],tempG[k][1],i,s,stage,Num_veh,Num_Veh_Ratio);
 							//save the best phase schedule
@@ -649,7 +637,7 @@ for(stage=1;stage<J;stage++)
 					{
 						tempG[k][0]=0;
 						tempG[k][1]=effectiveG[k];
-						if (tempG[k][1]<=MaxGreen_Ped[planned_phase[k][1]-1])
+						if (tempG[k][1]<=MaxGreen[planned_phase[k][1]-1])
 						{
 							temp_v[k]=f1_r(k,planned_phase[k][0],planned_phase[k][1],tempG[k][0],tempG[k][1],i,s,stage,Num_veh,Num_Veh_Ratio);
 							//save the best phase schedule

@@ -1,0 +1,84 @@
+J2735-SRM-MESSAGE DEFINITIONS AUTOMATIC TAGS::=
+BEGIN
+IMPORTS
+	Count,
+	DescriptiveName,
+	DHour,
+	DMinute,
+	DSecond,
+	DSRCmsgID,
+	Elevation,
+	Heading,
+	IntersectionID,
+	IntersectionStatusObject,
+	LaneNumber,
+	Latitude,
+	Longitude,
+	MsgCount,
+	NTCIPVehicleclass,
+	TemporaryID,
+	VehicleIdent,
+	VehicleType,
+	VINstring
+FROM J2735-MESSAGE-COMMON;
+
+ SRM ::= SEQUENCE {
+          msgID DSRCmsgID,
+          msgCnt MsgCount,
+           -- Request Data
+          request SignalRequest,
+          timeOfService DTime OPTIONAL,
+          -- the time in the near future when service is
+          -- requested to start
+          endOfService DTime OPTIONAL,
+          transitStatus TransitStatus OPTIONAL,
+          vehicleVIN VehicleIdent OPTIONAL,
+          vehicleData BSMblob,
+          -- current position data about the vehicle
+          status VehicleRequestStatus OPTIONAL,
+          -- current status data about the vehicle
+        ...
+	}
+
+SignalRequest ::= SEQUENCE {
+-- the regionally unique ID of the target intersection
+id IntersectionID, -- intersection ID
+-- Below present only when canceling a prior request
+isCancel SignalReqScheme OPTIONAL,
+requestedAction SignalReqScheme OPTIONAL,
+inLane LaneNumber OPTIONAL,
+-- approach Lane
+outLane LaneNumber OPTIONAL,
+type NTCIPVehicleclass,
+-- Two 4 bit nibbles as:
+-- NTCIP vehicle class type
+-- NTCIP vehicle class level
+-- any validation string used by the system
+codeWord CodeWord OPTIONAL,
+...
+}
+
+SignalReqScheme ::= OCTET STRING (SIZE(1))
+CodeWord ::= OCTET STRING (SIZE(1..16))
+
+DTime ::= SEQUENCE {
+hour DHour, -- 1 byte
+minute DMinute, -- 1 byte
+second DSecond -- 2 bytes
+}
+
+TransitStatus ::= BIT STRING {
+    none (0), -- nothing is active
+    anADAuse (1), -- an ADA access is in progress (wheelchairs, kneling, etc.)
+    aBikeLoad (2), -- loading of a bicyle is in progress
+    doorOpen (3), -- a vehicle door is open for passenger    access
+    occM (4),
+    occL (5)
+} (SIZE(6))
+
+BSMblob ::= OCTET STRING (SIZE(38))
+
+
+
+VehicleRequestStatus ::= OCTET STRING (SIZE(1))
+END

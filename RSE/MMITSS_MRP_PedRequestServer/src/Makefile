@@ -1,25 +1,11 @@
-SRC =   
-SRC += MMITSS_RSU_SMARTCROSS.cpp Signal.cpp SignalController.cpp
+SDK_ROOT=../../../compiler
+MAKE_ROOT=$(SDK_ROOT)/make
+include $(MAKE_ROOT)/header.mk
 
-TGT:=MMITSS_MRP_PedRequestServer
-TOOLCHAIN=../../../../sdk/rse/toolchain
-
-SAVARI_CC=$(TOOLCHAIN)/bin/i386-linux-uclibc-g++
-SAVARI_LD=$(TOOLCHAIN)/bin/i386-linux-uclibc-ld
-CFLAGS:=  -DPRINT_LOG -g
-LDFLAGS:=
-INCLUDES:=-I. -I$(TOOLCHAIN)/include -I$(TOOLCHAIN)/usr/include
-LIBS =-L$(TOOLCHAIN)/lib -L$(TOOLCHAIN)/usr/lib -lnetsnmp -lstdc++ -luClibc++ -leloop -lm
-
+SRC += MMITSS_MRP_PriorityRequestServer_simcoord.cpp ReqEntry.cpp  IntLanePhase.cpp ReqEntryListHandle.cpp AccelerationSet4Way.cpp PositionLocal3D.cpp BasicVehicle.cpp Brakes.cpp Motion.cpp
+TGT:=MMITSS_MRP_PriorityRequestServer_ASN
+LIBS+= -lnetsnmp -lstdc++ 
 OBJ = $(patsubst %.cpp, %.o, ${SRC})
-
-LIBS +=
-all:	$(TGT)
+include $(MAKE_ROOT)/rules.mk
 $(TGT): $(OBJ)
-	${SAVARI_CC}  $(LDFLAGS) $(OBJ) -o $(TGT) $(LIBS)
-
-%.o: %.cpp
-	${SAVARI_CC} $(INCLUDES) $(CFLAGS) -c -o $@ $<
-
-clean:
-	-rm -f $(TGT) $(OBJ) *~ *.o
+	${CC} ${CFLAGS} ${INCLUDES} $(LDFLAGS) $(OBJ) -o $(TGT) $(LIBS)

@@ -1,25 +1,14 @@
-SRC =   
-SRC += MMITSS_rsu_Signal_Control_field.cpp Signal.cpp Array.cpp Config.cpp PositionLocal3D.cpp
+SDK_ROOT=../../../sdk
+MAKE_ROOT=$(SDK_ROOT)/make
+include $(MAKE_ROOT)/header.mk
 
-TGT:=MMITSS_rsu_Signal_Control_field
-TOOLCHAIN=../toolchain
-
-SAVARI_CC=$(TOOLCHAIN)/bin/i386-linux-uclibc-g++
-SAVARI_LD=$(TOOLCHAIN)/bin/i386-linux-uclibc-ld
-CFLAGS:= -Wall -DPRINT_LOG
-LDFLAGS:=
-INCLUDES:=-I. -I$(TOOLCHAIN)/include -I$(TOOLCHAIN)/usr/include
-LIBS =-L$(TOOLCHAIN)/lib -L$(TOOLCHAIN)/usr/lib -lstdc++ -luClibc++ -leloop -lnetsnmp
+SRC += MMITSS_rsu_Signal_Control_visual.cpp Signal.cpp Array.cpp Config.cpp PositionLocal3D.cpp
+TGT:=MMITSS_rsu_Signal_Control_visual
+LIBS+= -lnetsnmp -lstdc++ -lm
 
 OBJ = $(patsubst %.cpp, %.o, ${SRC})
 
-LIBS +=
-all:	$(TGT)
+include $(MAKE_ROOT)/rules.mk
+
 $(TGT): $(OBJ)
-	${SAVARI_CC}  $(LDFLAGS) $(OBJ) -o $(TGT) $(LIBS)
-
-%.o: %.cpp
-	${SAVARI_CC} $(INCLUDES) $(CFLAGS) -c -o $@ $<
-
-clean:
-	-rm -f $(TGT) $(OBJ) *~ *.o
+	${CC} ${CFLAGS} ${INCLUDES} $(LDFLAGS) $(OBJ) -o $(TGT) $(LIBS)

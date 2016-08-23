@@ -1,0 +1,13 @@
+libglpk_la-jd.lo: misc/jd.c \
+ /home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/stdc-predef.h \
+ /home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/bits/predefs.h \
+ /home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/lib/gcc/arm-none-linux-gnueabi/4.8.3/include/stddef.h \
+ misc/jd.h
+
+/home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/stdc-predef.h:
+
+/home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/arm-none-linux-gnueabi/libc/usr/include/bits/predefs.h:
+
+/home/obesim/azv2i/MMITSS_Refreshed/sdk/imx/lib/gcc/arm-none-linux-gnueabi/4.8.3/include/stddef.h:
+
+misc/jd.h:

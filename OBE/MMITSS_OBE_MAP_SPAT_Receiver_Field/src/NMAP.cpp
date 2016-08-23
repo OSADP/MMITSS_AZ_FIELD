@@ -1,36 +1,16 @@
-//**********************************************************************************
-//
-// © 2015 Arizona Board of Regents on behalf of the University of Arizona with rights
-//       granted for USDOT OSADP distribution with the Apache 2.0 open source license.
-//
-//**********************************************************************************
-
-
-/* NMAP.cpp
-*  Created by :Yiheng Feng
-*  University of Arizona   
-*  ATLAS Research Center 
-*  College of Engineering
-*
-*  This code was develop under the supervision of Professor Larry Head
-*  in the ATLAS Research Center.
-
-
-*/
-
 #include "NMAP.h"
 #include<iostream>
 #include <string>
 #include <fstream>
 #include "stdlib.h"
 #include "math.h"
-
+#include <string.h>
 #define DEFAULT_ARRAY_SIZE 80
 
 using namespace std;
 
 //This function parse information from *.nmap and save to the MAP data structure
-int MAP::ParseIntersection(char* filename)
+int NMAP::ParseIntersection(char* filename)
 {
 	//Start parsing the MAP data from file
 
@@ -92,7 +72,7 @@ int MAP::ParseIntersection(char* filename)
 
 
 //initialize approaches
-Approach temp_appro;
+N_Approach temp_appro;
 for(i=0;i<intersection.Appro_No;i++)
 {
 	intersection.Approaches.push_back(temp_appro);
@@ -134,7 +114,7 @@ for(i=0;i<intersection.Appro_No;i++)
 
 			//////////////////////////////Start reading Lanes
 			//first initialize lanes
-			Lane temp_lane;
+			N_Lane temp_lane;
 			for(j=0;j<intersection.Approaches[i].Lane_No;j++)
 			{
 				intersection.Approaches[i].Lanes.push_back(temp_lane);
@@ -192,7 +172,7 @@ for(i=0;i<intersection.Appro_No;i++)
 
 					}
 					//Initialize Nodes First
-					LaneNodes temp_node;
+					N_LaneNodes temp_node;
 					for(k=0;k<intersection.Approaches[i].Lanes[j].Node_No;k++)
 					{
 						intersection.Approaches[i].Lanes[j].Nodes.push_back(temp_node);
@@ -214,7 +194,7 @@ for(i=0;i<intersection.Appro_No;i++)
 					getline(map_file, lineread); // Read line by line
 					sscanf(lineread.c_str(), "%s %d",token_char,&intersection.Approaches[i].Lanes[j].Connection_No);
 					//Initialize lane connections
-					LaneConnection temp_connection;
+					N_LaneConnection temp_connection;
 					for(k=0;k<intersection.Approaches[i].Lanes[j].Connection_No;k++)
 					{
 						intersection.Approaches[i].Lanes[j].Connections.push_back(temp_connection);

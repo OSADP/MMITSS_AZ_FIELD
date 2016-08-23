@@ -1,23 +1,3 @@
-//**********************************************************************************
-//
-// © 2015 Arizona Board of Regents on behalf of the University of Arizona with rights
-//       granted for USDOT OSADP distribution with the Apache 2.0 open source license.
-//
-//**********************************************************************************
-
-
-/* NMAP.h
-*  Created by :Yiheng Feng
-*  University of Arizona   
-*  ATLAS Research Center 
-*  College of Engineering
-*
-*  This code was develop under the supervision of Professor Larry Head
-*  in the ATLAS Research Center.
-
-
-*/
-
 #pragma once
 
 #include <vector>
@@ -34,7 +14,7 @@
 
 using namespace std;
 
-class ElementID
+class N_ElementID
 {
  public:
    int Approach;
@@ -42,10 +22,10 @@ class ElementID
    int Node;
 };
 
-class LaneNodes			// lane nodes
+class N_LaneNodes			// lane nodes
 {
 public:
-    ElementID index;
+    N_ElementID index;
 	int ID;
 	double E_Offset;
 	double N_Offset;
@@ -53,47 +33,47 @@ public:
 	double Longitude;
 };
 
-class LaneConnection
+class N_LaneConnection
 {
 public:
-	ElementID ConnectedLaneName;
+	N_ElementID ConnectedLaneName;
 	int Maneuver;
 };
 
-class ReferenceLane
+class N_ReferenceLane
 {
 public:
 	int LaneID;
 	double LateralOffset;
 };
 
-class Lane
+class N_Lane
 {
 public:
 	string Lane_Name;
 	int ID;
 	int Attributes[16];  //16 bits of attributes
 	int Connection_No;
-	vector<LaneConnection> Connections;
+	vector<N_LaneConnection> Connections;
 	int Direction;  //This is direction of the lane Northbound=1;Eastbound=2;Southbound=3;Westbound=4; reserved! not use now
 	int Node_No;
-	vector<LaneNodes> Nodes;
-	ReferenceLane RefLane;
+	vector<N_LaneNodes> Nodes;
+	N_ReferenceLane RefLane;
 	int Type;           //currently all 1: motorized vehicle lane
 	int Width;   //in centermeters
 };
 
-class Approach
+class N_Approach
 {
 public:
 	int ID;
 	int Direction; //not use yet
 	int type;      // 1: approach; 2:engress
 	int Lane_No;
-	vector<Lane> Lanes;
+	vector<N_Lane> Lanes;
 };
 
-class Intersection
+class N_Intersection
 {
 public:
 	int ID;
@@ -102,16 +82,16 @@ public:
 	double Ref_Long;
 	double Ref_Ele;
 	int Appro_No;
-	vector<Approach> Approaches;
+	vector<N_Approach> Approaches;
 	string Map_Name;
 	string Rsu_ID;
 	//method
 };
 
-class MAP
+class NMAP
 {
 public:
-	Intersection intersection;
+	N_Intersection intersection;
 	int ID;
 	int Version;
 	//method

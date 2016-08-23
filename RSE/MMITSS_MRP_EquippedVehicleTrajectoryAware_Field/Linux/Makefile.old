@@ -1,0 +1,36 @@
+SRC =   
+LIBS=
+
+SRC += MMITSS_MRP_EquippedVehicleTrajectoryAware_ASN.cpp GeoCoord.cpp NMAP.cpp AccelerationSet4Way.cpp BasicVehicle.cpp Brakes.cpp PositionLocal3D.cpp Motion.cpp
+
+TGT:=MMITSS_MRP_EquippedVehicleTrajectoryAware_ASN
+MMITSS=../../../sdk/mmitss
+CFLAGS:=-DPRINT_LOG -g
+INCLUDES:=-I. -I$(MMITSS)/include/libj2735
+LIBS+=-L$(MMITSS)/lib 
+
+all:TOOLCHAIN=../../../sdk/rse/toolchain
+all:CC=$(TOOLCHAIN)/bin/i386-linux-uclibc-g++
+all:LD=$(TOOLCHAIN)/bin/i386-linux-uclibc-ld
+all:INCLUDES+=-I$(TOOLCHAIN)/include -I$(TOOLCHAIN)/usr/include
+all:LIBS+=-L$(TOOLCHAIN)/lib -L$(TOOLCHAIN)/usr/lib -luClibc++ -lj2735-rse
+
+linux:TOOLCHAIN=
+linux:CC=g++
+linux:LD=ld
+linux:LIBS+=-lj2735-linux
+
+LIBS+=-lnetsnmp -lstdc++ -lm
+OBJ = $(patsubst %.cpp, %.o, ${SRC})
+
+all:	$(TGT)
+linux:	$(TGT)
+
+$(TGT): $(OBJ)
+	${CC} ${CFLAGS} ${INCLUDES} $(LDFLAGS) $(OBJ) -o $(TGT) $(LIBS)
+
+%.o: %.cpp
+	${CC} ${CFLAGS} $(INCLUDES) -c -o $@ $<
+
+clean:
+	-rm -f $(TGT) $(OBJ) *~ *.o

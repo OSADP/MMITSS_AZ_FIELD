@@ -1,0 +1,1128 @@
+/*PDM ASN.1 Module Shayan */
+J2735PVDMESSAGE DEFINITIONS AUTOMATIC TAGS::=
+BEGIN
+
+	ProbeVehicleData ::= SEQUENCE {
+		msgID DSRCmsgID, -- App ID value, 1 byte
+		segNum ProbeSegmentNumber OPTIONAL,
+				-- a short term Ident value
+				-- not used when ident is used
+		probeID VehicleIdent OPTIONAL,
+				-- ident data for selected
+				-- types of vehicles
+		startVector FullPositionVector, -- the space and time of
+				-- transmission to the RSU
+		vehicleType VehicleType, -- type of vehicle, 1 byte
+		cntSnapshots Count OPTIONAL,
+				-- a count of how many snaphots
+				-- type entries will follow
+		snapshots SEQUENCE (SIZE(1..32)) OF Snapshot,
+				-- a seq of name-value pairs
+				-- along with the space and time
+				-- of the first measurement set
+	... -- # LOCAL_CONTENT
+	} -- Est size about 64 bytes plus snapshot sizes (about 12 per)
+
+
+DSRCmsgID ::= ENUMERATED {
+reserved (0),
+alaCarteMessage (1), -- ACM
+basicSafetyMessage (2), -- BSM, heartbeat msg
+basicSafetyMessageVerbose (3), -- used for testing only
+commonSafetyRequest (4), -- CSR
+emergencyVehicleAlert (5), -- EVA
+intersectionCollisionAlert (6), -- ICA
+mapData (7), -- MAP, GID, intersections
+nmeaCorrections (8), -- NMEA
+probeDataManagement (9), -- PDM
+probeVehicleData (10), -- PVD
+roadSideAlert (11), -- RSA
+rtcmCorrections (12), -- RTCM
+signalPhaseAndTimingMessage (13), -- SPAT
+signalRequestMessage (14), -- SRM
+signalStatusMessage (15), -- SSM
+travelerInformation (16), -- TIM
+... -- # LOCAL_CONTENT
+}
+
+
+ProbeSegmentNumber ::= INTEGER (0..32767)
+-- value determined by local device
+-- as per standard
+
+
+VehicleIdent ::= SEQUENCE {
+name DescriptiveName OPTIONAL,
+	-- a human readable name for debugging use
+vin VINstring OPTIONAL,
+	-- vehicle VIN value
+ownerCode IA5String(SIZE(1..32)) OPTIONAL,
+	-- vehicle owner code
+id TemporaryID OPTIONAL,
+	-- same value used in the BSM
+vehicleType VehicleType OPTIONAL,
+vehicleClass CHOICE
+{
+vGroup VehicleGroupAffected,
+rGroup ResponderGroupAffected,
+rEquip IncidentResponseEquipment
+} OPTIONAL,
+... -- # LOCAL_CONTENT
+}
+
+
+DescriptiveName ::= IA5String (SIZE(1..63))
+
+
+VINstring ::= OCTET STRING (SIZE(1..17))
+-- A legal VIN or a shorter value
+-- to provide an ident of the vehicle
+-- If a VIN is sent, then IA5 encoding
+-- shall be used
+
+
+TemporaryID ::= OCTET STRING (SIZE(4)) -- a 4 byte string array
+
+
+VehicleType ::= ENUMERATED {
+none (0), -- Not Equipped, Not known or unavailable
+unknown (1), -- Does not fit any other category
+special (2), -- Special use
+moto (3), -- Motorcycle
+car (4), -- Passenger car
+carOther (5), -- Four tire single units
+bus (6), -- Buses
+axleCnt2 (7), -- Two axle, six tire single units
+axleCnt3 (8), -- Three axle, single units
+axleCnt4 (9), -- Four or more axle, single unit
+axleCnt4Trailer (10), -- Four or less axle, single trailer
+axleCnt5Trailer (11), -- Five or less axle, single trailer
+axleCnt6Trailer (12), -- Six or more axle, single trailer
+axleCnt5MultiTrailer (13), -- Five or less axle, multi-trailer
+axleCnt6MultiTrailer (14), -- Six axle, multi-trailer
+axleCnt7MultiTrailer (15), -- Seven or more axle, multi-trailer
+... -- # LOCAL_CONTENT
+}
+-- values to 127 reserved for std use
+-- values 128 to 255 reserved for local use
+
+
+VehicleGroupAffected ::= ENUMERATED {
+all-vehicles (9217),
+bicycles (9218),
+motorcycles (9219), -- to include mopeds as well
+cars (9220), -- (remapped from ERM value of
+-- zero)
+light-vehicles (9221),
+cars-and-light-vehicles (9222),
+cars-with-trailers (9223),
+cars-with-recreational-trailers (9224),
+vehicles-with-trailers (9225),
+heavy-vehicles (9226),
+trucks (9227),
+buses (9228),
+articulated-buses (9229),
+school-buses (9230),
+vehicles-with-semi-trailers (9231),
+vehicles-with-double-trailers (9232), -- Alternative Rendering: western
+-- doubles
+high-profile-vehicles (9233),
+wide-vehicles (9234),
+long-vehicles (9235),
+hazardous-loads (9236),
+exceptional-loads (9237),
+abnormal-loads (9238),
+convoys (9239),
+maintenance-vehicles (9240),
+delivery-vehicles (9241),
+vehicles-with-even-numbered-license-plates (9242),
+vehicles-with-odd-numbered-license-plates (9243),
+vehicles-with-parking-permits (9244),
+vehicles-with-catalytic-converters (9245),
+vehicles-without-catalytic-converters (9246),
+gas-powered-vehicles (9247),
+diesel-powered-vehicles (9248),
+lPG-vehicles (9249),
+military-convoys (9250),
+military-vehicles (9251),
+... -- # LOCAL_CONTENT_ITIS
+}
+-- Classification of vehicles and types of transport
+
+
+ResponderGroupAffected ::= ENUMERATED {
+emergency-vehicle-units (9729), -- Default phrase, to be used when one of
+-- the below does not fit better
+federal-law-enforcement-units (9730),
+state-police-units (9731),
+county-police-units (9732), -- Hint: also sheriff response units
+local-police-units (9733),
+ambulance-units (9734),
+rescue-units (9735),
+fire-units (9736),
+hAZMAT-units (9737),
+light-tow-unit (9738),
+heavy-tow-unit (9739),
+freeway-service-patrols (9740),
+transportation-response-units (9741),
+private-contractor-response-units (9742),
+... -- # LOCAL_CONTENT_ITIS
+}
+-- These groups are used in coordinated response and staging area information
+-- (rather than typically consumer related)
+
+
+IncidentResponseEquipment ::= ENUMERATED {
+ground-fire-suppression (9985),
+heavy-ground-equipment (9986),
+aircraft (9988),
+marine-equipment (9989),
+support-equipment (9990),
+medical-rescue-unit (9991),
+other (9993), -- Depreciated by fire standards, do not
+-- use
+ground-fire-suppression-other (9994),
+engine (9995),
+truck-or-aerial (9996),
+quint (9997), -- A five-function type of fire apparatus.
+-- The units in the movie Backdraft were
+-- quints
+tanker-pumper-combination (9998),
+brush-truck (10000),
+aircraft-rescue-firefighting (10001),
+heavy-ground-equipment-other (10004),
+dozer-or-plow (10005),
+tractor (10006),
+tanker-or-tender (10008),
+aircraft-other (10024),
+aircraft-fixed-wing-tanker (10025),
+helitanker (10026),
+helicopter (10027),
+marine-equipment-other (10034),
+fire-boat-with-pump (10035),
+boat-no-pump (10036),
+support-apparatus-other (10044),
+breathing-apparatus-support (10045),
+light-and-air-unit (10046),
+medical-rescue-unit-other (10054),
+rescue-unit (10055),
+urban-search-rescue-unit (10056),
+high-angle-rescue (10057),
+crash-fire-rescue (10058),
+bLS-unit (10059),
+aLS-unit (10060),
+mobile-command-post (10075), -- Depreciated, do not use
+chief-officer-car (10076),
+hAZMAT-unit (10077),
+type-i-hand-crew (10078),
+type-ii-hand-crew (10079),
+privately-owned-vehicle (10083), -- (Often found in volunteer fire teams)
+other-apparatus-resource (10084), -- (Remapped from fire code zero)
+ambulance (10085),
+bomb-squad-van (10086),
+combine-harvester (10087),
+construction-vehicle (10088),
+farm-tractor (10089),
+grass-cutting-machines (10090),
+hAZMAT-containment-tow (10091),
+heavy-tow (10092),
+light-tow (10094),
+flatbed-tow (10114),
+hedge-cutting-machines (10093),
+mobile-crane (10095),
+refuse-collection-vehicle (10096),
+resurfacing-vehicle (10097),
+road-sweeper (10098),
+roadside-litter-collection-crews (10099),
+salvage-vehicle (10100),
+sand-truck (10101),
+snowplow (10102),
+steam-roller (10103),
+swat-team-van (10104),
+track-laying-vehicle (10105),
+unknown-vehicle (10106),
+white-lining-vehicle (10107), -- Consider using Roadwork "road marking
+-- operations" unless the objective is to
+-- refer to the specific vehicle of this
+-- type. Alternative Rendering: line
+-- painting vehicle
+dump-truck (10108),
+supervisor-vehicle (10109),
+snow-blower (10110),
+rotary-snow-blower (10111),
+road-grader (10112), -- Alternative term: motor grader
+steam-truck (10113), -- A special truck that thaws culverts and
+-- storm drains
+... -- # LOCAL_CONTENT_ITIS
+}
+
+
+FullPositionVector ::= SEQUENCE {
+utcTime DDateTime OPTIONAL, -- time with mSec precision
+long Longitude, -- 1/10th microdegree
+lat Latitude, -- 1/10th microdegree
+elevation Elevation OPTIONAL, -- 3 bytes, 0.1 m
+heading Heading OPTIONAL,
+speed TransmissionAndSpeed OPTIONAL,
+posAccuracy PositionalAccuracy OPTIONAL,
+timeConfidence TimeConfidence OPTIONAL,
+posConfidence PositionConfidenceSet OPTIONAL,
+speedConfidence SpeedandHeadingandThrottleConfidence OPTIONAL,
+... -- # LOCAL_CONTENT
+}
+
+
+DDateTime ::= SEQUENCE {
+year DYear OPTIONAL, -- 2 bytes
+month DMonth OPTIONAL, -- 1 byte
+day DDay OPTIONAL, -- 1 byte
+hour DHour OPTIONAL, -- 1 byte
+minute DMinute OPTIONAL, -- 1 byte
+second DSecond OPTIONAL -- 2 bytes
+}
+
+
+DYear ::= INTEGER (0..9999) -- units of years
+DMonth ::= INTEGER (0..15) -- units of months
+DDay ::= INTEGER (0..31) -- units of days
+DHour ::= INTEGER (0..31) -- units of hours
+DMinute ::= INTEGER (0..63) -- units of minutes
+DSecond ::= INTEGER (0..65535) -- units of miliseconds
+
+
+Longitude ::= INTEGER (-1800000000..1800000001)
+-- LSB = 1/10 micro degree
+-- Providing a range of plus-minus 180 degrees
+
+
+Latitude ::= INTEGER (-900000000..900000001)
+-- LSB = 1/10 micro degree
+-- Providing a range of plus-minus 90 degrees
+
+
+Elevation ::= OCTET STRING (SIZE(2))
+-- 1 decimeter LSB (10 cm)
+-- Encode elevations from 0 to 6143.9 meters
+-- above the reference ellipsoid as 0x0000 to 0xEFFF.
+-- Encode elevations from -409.5 to -0.1 meters,
+-- i.e. below the reference ellipsoid, as 0xF001 to 0xFFFF
+-- unknown as 0xF000
+
+
+Heading ::= INTEGER (0..28800)
+-- LSB of 0.0125 degrees
+-- A range of 0 to 359.9875 degrees
+
+
+TransmissionAndSpeed ::= OCTET STRING (SIZE(2))
+-- Bits 14~16 to be made up of the data element
+-- DE_TransmissionState
+-- Bits 1~13 to be made up of the data element
+-- DE_Speed
+
+
+PositionalAccuracy ::= OCTET STRING (SIZE(4))
+-- And the bytes defined as folllows
+-- Byte 1: semi-major accuracy at one standard dev
+-- range 0-12.7 meter, LSB = .05m
+-- 0xFE=254=any value equal or greater than 12.70 meter
+-- 0xFF=255=unavailable semi-major value
+-- Byte 2: semi-minor accuracy at one standard dev
+-- range 0-12.7 meter, LSB = .05m
+-- 0xFE=254=any value equal or greater than 12.70 meter
+-- 0xFF=255=unavailable semi-minor value
+-- Bytes 3-4: orientation of semi-major axis
+-- relative to true north (0~359.9945078786 degrees)
+-- LSB units of 360/65535 deg = 0.0054932479
+-- a value of 0x0000 =0 shall be 0 degrees
+-- a value of 0x0001 =1 shall be 0.0054932479degrees
+-- a value of 0xFFFE =65534 shall be 359.9945078786 deg
+-- a value of 0xFFFF =65535 shall be used for orientation unavailable
+-- (In NMEA GPGST)
+
+
+TimeConfidence ::= ENUMERATED {
+unavailable (0), -- Not Equipped or unavailable
+time-100-000 (1), -- Better then 100 Seconds
+time-050-000 (2), -- Better then 50 Seconds
+time-020-000 (3), -- Better then 20 Seconds
+time-010-000 (4), -- Better then 10 Seconds
+time-002-000 (5), -- Better then 2 Seconds
+time-001-000 (6), -- Better then 1 Second
+time-000-500 (7), -- Better then 0.5 Seconds
+time-000-200 (8), -- Better then 0.2 Seconds
+time-000-100 (9), -- Better then 0.1 Seconds
+time-000-050 (10), -- Better then 0.05 Seconds
+time-000-020 (11), -- Better then 0.02 Seconds
+time-000-010 (12), -- Better then 0.01 Seconds
+time-000-005 (13), -- Better then 0.005 Seconds
+time-000-002 (14), -- Better then 0.002 Seconds
+time-000-001 (15), -- Better then 0.001 Seconds
+-- Better then one milisecond
+time-000-000-5 (16), -- Better then 0.000,5 Seconds
+time-000-000-2 (17), -- Better then 0.000,2 Seconds
+time-000-000-1 (18), -- Better then 0.000,1 Seconds
+time-000-000-05 (19), -- Better then 0.000,05 Seconds
+time-000-000-02 (20), -- Better then 0.000,02 Seconds
+time-000-000-01 (21), -- Better then 0.000,01 Seconds
+time-000-000-005 (22), -- Better then 0.000,005 Seconds
+time-000-000-002 (23), -- Better then 0.000,002 Seconds
+time-000-000-001 (24), -- Better then 0.000,001 Seconds
+-- Better then one micro second
+time-000-000-000-5 (25), -- Better then 0.000,000,5 Seconds
+time-000-000-000-2 (26), -- Better then 0.000,000,2 Seconds
+time-000-000-000-1 (27), -- Better then 0.000,000,1 Seconds
+time-000-000-000-05 (28), -- Better then 0.000,000,05 Seconds
+time-000-000-000-02 (29), -- Better then 0.000,000,02 Seconds
+time-000-000-000-01 (30), -- Better then 0.000,000,01 Seconds
+time-000-000-000-005 (31), -- Better then 0.000,000,005 Seconds
+time-000-000-000-002 (32), -- Better then 0.000,000,002 Seconds
+time-000-000-000-001 (33), -- Better then 0.000,000,001 Seconds
+-- Better then one nano second
+time-000-000-000-000-5 (34), -- Better then 0.000,000,000,5 Seconds
+time-000-000-000-000-2 (35), -- Better then 0.000,000,000,2 Seconds
+time-000-000-000-000-1 (36), -- Better then 0.000,000,000,1 Seconds
+time-000-000-000-000-05 (37), -- Better then 0.000,000,000,05 Seconds
+time-000-000-000-000-02 (38), -- Better then 0.000,000,000,02 Seconds
+time-000-000-000-000-01 (39) -- Better then 0.000,000,000,01 Seconds
+}
+
+
+PositionConfidenceSet ::= OCTET STRING (SIZE(1))
+-- To be encoded as:
+-- SEQUENCE {
+-- pos PositionConfidence,
+-- -x- 4 bits, for both horizontal directions
+-- elevation ElevationConfidence
+-- -x- 4 bits
+-- }
+
+
+SpeedandHeadingandThrottleConfidence ::= OCTET STRING (SIZE(1))
+-- to be packed as follows:
+-- SEQUENCE {
+-- heading HeadingConfidence, -x- 3 bits
+-- speed SpeedConfidence, -x- 3 bits
+-- throttle ThrottleConfidence -x- 2 bits
+-- }
+
+
+Count ::= INTEGER (0..32)
+
+
+Snapshot ::= SEQUENCE {
+thePosition FullPositionVector,
+-- data of the position and speed,
+safetyExt VehicleSafetyExtension OPTIONAL,
+datSet VehicleStatus OPTIONAL,
+-- a seq of data frames
+-- which encodes the data
+... -- # LOCAL_CONTENT
+}
+
+
+VehicleSafetyExtension ::= SEQUENCE {
+events EventFlags OPTIONAL,
+pathHistory PathHistory OPTIONAL,
+pathPrediction PathPrediction OPTIONAL,
+theRTCM RTCMPackage OPTIONAL,
+... -- # LOCAL_CONTENT
+}
+
+
+EventFlags ::= INTEGER (0..8192)
+-- With bits as defined:
+eventHazardLights EventFlags ::= 1
+eventStopLineViolation EventFlags ::= 2 -- Intersection Violation
+eventABSactivated EventFlags ::= 4
+eventTractionControlLoss EventFlags ::= 8
+eventStabilityControlactivated EventFlags ::= 16
+eventHazardousMaterials EventFlags ::= 32
+eventEmergencyResponse EventFlags ::= 64
+eventHardBraking EventFlags ::= 128
+eventLightsChanged EventFlags ::= 256
+eventWipersChanged EventFlags ::= 512
+eventFlatTire EventFlags ::= 1024
+eventDisabledVehicle EventFlags ::= 2048
+eventAirBagDeployment EventFlags ::= 4096
+
+
+PathHistory ::= SEQUENCE {
+initialPosition FullPositionVector OPTIONAL,
+currGPSstatus GPSstatus OPTIONAL,
+itemCnt Count OPTIONAL,
+-- Limited to range 1 to 23
+-- number of points in set to follow
+crumbData CHOICE {
+-- select one of the possible data sets to be used
+pathHistoryPointSets-01 SEQUENCE (SIZE(1..23)) OF
+PathHistoryPointType-01,
+-- made up of sets of the: PathHistoryPointType-1
+-- a set of all data elements, it is
+-- non-uniform in size, each item tagged in BER
+pathHistoryPointSets-02 OCTET STRING (SIZE(15..345)),
+-- made up of sets of the: PathHistoryPointType-02
+-- sets of all data elements including:
+-- lat, long, elev, time, accuracy, heading, and speed
+-- offsets sent as a packed blob of 15 bytes per point
+pathHistoryPointSets-03 OCTET STRING (SIZE(12..276)),
+-- made up of sets of the: PathHistoryPointType-03
+-- sets of the following data elements:
+-- lat, long, elev, time, and accuracy
+-- offsets sent as a packed blob of 12 bytes per point
+pathHistoryPointSets-04 OCTET STRING (SIZE(8..184)),
+-- made up of sets of the: PathHistoryPointType-04
+-- sets of the following data elements:
+-- lat, long, elev, and time
+-- offsets sent as a packed blob of 8 bytes per point
+pathHistoryPointSets-05 OCTET STRING (SIZE(10..230)),
+-- made up of sets of the: PathHistoryPointType-05
+-- sets of the following data elements:
+-- lat, long, elev, and accuracy
+-- offsets sent as a packed blob of 10 bytes per point
+pathHistoryPointSets-06 OCTET STRING (SIZE(6..138)),
+-- made up of sets of the: PathHistoryPointType-06
+-- sets of the following data elements:
+-- lat, long, and elev
+-- offsets sent as a packed blob of 6 bytes per point
+pathHistoryPointSets-07 OCTET STRING (SIZE(11..242)),
+-- made up of sets of the: PathHistoryPointType-07
+-- sets of the following data elements:
+-- lat, long, time, and accuracy
+-- offsets sent as a packed blob of 10.5 bytes per point
+pathHistoryPointSets-08 OCTET STRING (SIZE(7..161)),
+-- made up of sets of the: PathHistoryPointType-08
+-- sets of the following data elements:
+-- lat, long, and time
+-- offsets sent as a packed blob of 7 bytes per point
+pathHistoryPointSets-09 OCTET STRING (SIZE(9..196)),
+-- made up of sets of the: PathHistoryPointType-09
+-- sets of the following data elements:
+-- lat, long, and accuracy
+-- offsets sent as a packed blob of 8.5 bytes per point
+pathHistoryPointSets-10 OCTET STRING (SIZE(5..104))
+-- made up of sets of the: PathHistoryPointType-10
+-- sets of the following data elements:
+-- lat and long
+-- offsets sent as a packed blob of 4.5 bytes per point
+},
+... -- # LOCAL_CONTENT
+}
+
+
+PathPrediction ::= SEQUENCE {
+radiusOfCurve INTEGER (-32767..32767),
+-- LSB units of 10cm
+-- straight path to use value of 32767
+confidence INTEGER (0..200),
+-- LSB units of 0.5 percent
+... -- # LOCAL_CONTENT
+}
+
+
+RTCMPackage ::= SEQUENCE {
+anchorPoint FullPositionVector OPTIONAL,
+-- precise observer position, if needed
+rtcmHeader RTCMHeader,
+-- an octet blob consisting of:
+-- one byte with:
+-- GPSstatus
+-- 4 bytes with:
+-- AntennaOffsetSet containing x,y,z data
+-- note that a max of 16 satellites are allowed
+msg1001 OCTET STRING (SIZE(16..124)) OPTIONAL,
+-- pRange data GPS L1
+msg1002 OCTET STRING (SIZE(18..156)) OPTIONAL,
+-- pRange data GPS L1
+msg1003 OCTET STRING (SIZE(21..210)) OPTIONAL,
+-- pRange data GPS L1, L2
+msg1004 OCTET STRING (SIZE(24..258)) OPTIONAL,
+-- pRange data GPS L1, L2
+msg1005 OCTET STRING (SIZE(19)) OPTIONAL,
+-- observer station data
+msg1006 OCTET STRING (SIZE(21)) OPTIONAL,
+-- observer station data
+msg1007 OCTET STRING (SIZE(5..36)) OPTIONAL,
+-- antenna of observer station data
+msg1008 OCTET STRING (SIZE(6..68)) OPTIONAL,
+-- antenna of observer station data
+msg1009 OCTET STRING (SIZE(16..136)) OPTIONAL,
+-- pRange data GLONASS L1
+msg1010 OCTET STRING (SIZE(18..166)) OPTIONAL,
+-- pRange data GLONASS L1
+msg1011 OCTET STRING (SIZE(21..222)) OPTIONAL,
+-- pRange data GLONASS L1, L2
+msg1012 OCTET STRING (SIZE(24..268)) OPTIONAL,
+-- pRange data GLONASS L1, L2
+msg1013 OCTET STRING (SIZE(13..27)) OPTIONAL,
+-- system parameters data
+..., -- # LOCAL_CONTENT
+-- The below items shall never be sent
+-- over WSM stack encoding (other encodings may be used)
+-- and may be removed from the ASN
+msg1014 OCTET STRING (SIZE(15)) OPTIONAL,
+-- Network Aux Station (NAS) data
+msg1015 OCTET STRING (SIZE(13..69)) OPTIONAL,
+-- Ionospheric Correction data
+msg1016 OCTET STRING (SIZE(14..81)) OPTIONAL,
+-- Geometry Correction data
+msg1017 OCTET STRING (SIZE(16..115)) OPTIONAL,
+-- Combined Ionospheric and Geometry data
+-- msg1018 is reserved at this time
+msg1019 OCTET STRING (SIZE(62)) OPTIONAL,
+-- Satellite Ephermeris data
+msg1020 OCTET STRING (SIZE(45)) OPTIONAL,
+-- Satellite Ephermeris data
+msg1021 OCTET STRING (SIZE(62)) OPTIONAL,
+-- Helmert-Abridged Molodenski Transform data
+msg1022 OCTET STRING (SIZE(75)) OPTIONAL,
+-- Molodenski-Badekas Transform data
+msg1023 OCTET STRING (SIZE(73)) OPTIONAL,
+-- Ellipse Residuals data
+msg1024 OCTET STRING (SIZE(74)) OPTIONAL,
+-- Plane-Grid Residuals data
+msg1025 OCTET STRING (SIZE(25)) OPTIONAL,
+-- Non-Lab Conic Project data
+msg1026 OCTET STRING (SIZE(30)) OPTIONAL,
+-- Lab Conic Conform Project data
+msg1027 OCTET STRING (SIZE(33)) OPTIONAL,
+-- Ob Mercator Project data
+-- msg1028 is reserved at this time
+msg1029 OCTET STRING (SIZE(10..69)) OPTIONAL,
+-- Unicode test type data
+msg1030 OCTET STRING (SIZE(14..105)) OPTIONAL,
+-- GPS Residuals data
+msg1031 OCTET STRING (SIZE(15..107)) OPTIONAL,
+-- GLONASS Residuals data
+msg1032 OCTET STRING (SIZE(20)) OPTIONAL,
+-- Ref Station Position data
+-- Proprietary Data content (msg40xx to msg4095)
+-- may be added as needed
+... -- # LOCAL_CONTENT
+}
+
+
+RTCMHeader ::= OCTET STRING (SIZE(5))
+-- defined as:
+-- SEQUENCE {
+-- status GPSstatus,
+-- to occupy 1 byte
+-- offsetSet AntennaOffsetSet
+-- to occupy 4 bytes
+-- }
+
+
+VehicleStatus ::= SEQUENCE {
+lights ExteriorLights OPTIONAL, -- Exterior Lights
+lightBar LightbarInUse OPTIONAL, -- PS Lights
+wipers SEQUENCE {
+statusFront WiperStatusFront,
+rateFront WiperRate,
+statusRear WiperStatusRear OPTIONAL,
+rateRear WiperRate OPTIONAL
+} OPTIONAL, -- Wipers
+brakeStatus BrakeSystemStatus OPTIONAL,
+-- 2 bytes with the following in it:
+-- wheelBrakes BrakeAppliedStatus,
+-- -x- 4 bits
+-- traction TractionControlState,
+-- -x- 2 bits
+-- abs AntiLockBrakeStatus,
+-- -x- 2 bits
+-- scs StablityControlStatus,
+-- -x- 2 bits
+-- brakeBoost BrakeBoostApplied,
+-- -x- 2 bits
+-- spareBits
+-- -x- 4 bits
+-- Note that is present in BSM Part I
+-- Braking Data
+brakePressure BrakeAppliedPressure OPTIONAL, -- Braking Pressure
+roadFriction CoefficientOfFriction OPTIONAL, -- Roadway Friction
+sunData SunSensor OPTIONAL, -- Sun Sensor
+rainData RainSensor OPTIONAL, -- Rain Sensor
+airTemp AmbientAirTemperature OPTIONAL, -- Air Temperature
+airPres AmbientAirPressure OPTIONAL, -- Air Pressure
+steering SEQUENCE {
+angle SteeringWheelAngle,
+confidence SteeringWheelAngleConfidence OPTIONAL,
+rate SteeringWheelAngleRateOfChange OPTIONAL,
+wheels DrivingWheelAngle OPTIONAL
+} OPTIONAL, -- steering data
+accelSets SEQUENCE {
+accel4way AccelerationSet4Way OPTIONAL,
+vertAccelThres VerticalAccelerationThreshold OPTIONAL,
+-- Wheel Exceeded point
+yawRateCon YawRateConfidence OPTIONAL,
+-- Yaw Rate Confidence
+hozAccelCon AccelerationConfidence OPTIONAL,
+-- Acceleration Confidence
+confidenceSet ConfidenceSet OPTIONAL
+-- general ConfidenceSet
+} OPTIONAL,
+object SEQUENCE {
+obDist ObstacleDistance, -- Obstacle Distance
+obDirect ObstacleDirection, -- Obstacle Direction
+dateTime DDateTime -- time detected
+} OPTIONAL, -- detected Obstacle data
+fullPos FullPositionVector OPTIONAL, -- complete set of time and
+-- position, speed, heading
+throttlePos ThrottlePosition OPTIONAL,
+speedHeadC SpeedandHeadingandThrottleConfidence OPTIONAL,
+speedC SpeedConfidence OPTIONAL,
+vehicleData SEQUENCE {
+height VehicleHeight,
+bumpers BumperHeights,
+mass VehicleMass,
+trailerWeight TrailerWeight,
+type VehicleType
+-- values for width and length are sent in BSM part I as well.
+} OPTIONAL, -- vehicle data
+vehicleIdent VehicleIdent OPTIONAL, -- comm vehicle data
+j1939data J1939data OPTIONAL, -- Various SAE J1938 data items
+weatherReport SEQUENCE {
+isRaining EssPrecipYesNo,
+rainRate EssPrecipRate OPTIONAL,
+precipSituation EssPrecipSituation OPTIONAL,
+solarRadiation EssSolarRadiation OPTIONAL,
+friction EssMobileFriction OPTIONAL
+} OPTIONAL, -- local weather data
+gpsStatus GPSstatus OPTIONAL, -- vehicle's GPS
+... -- # LOCAL_CONTENT OPTIONAL,
+}
+
+
+ExteriorLights ::= INTEGER (0..256)
+-- With bits as defined:
+allLightsOff ExteriorLights ::= 0
+-- B'0000-0000
+lowBeamHeadlightsOn ExteriorLights ::= 1
+-- B'0000-0001
+highBeamHeadlightsOn ExteriorLights ::= 2
+-- B'0000-0010
+leftTurnSignalOn ExteriorLights ::= 4
+-- B'0000-0100
+rightTurnSignalOn ExteriorLights ::= 8
+-- B'0000-1000
+hazardSignalOn ExteriorLights ::= 12
+-- B'0000-1100
+automaticLightControlOn ExteriorLights ::= 16
+-- B'0001-0000
+daytimeRunningLightsOn ExteriorLights ::= 32
+-- B'0010-0000
+fogLightOn ExteriorLights ::= 64
+-- B'0100-0000
+parkingLightsOn ExteriorLights ::= 128
+-- B'1000-0000
+
+
+LightbarInUse ::= ENUMERATED {
+unavailable (0), -- Not Equipped or unavailable
+notInUse (1), -- none active
+inUse (2),
+sirenInUse (3),
+yellowCautionLights (4),
+schooldBusLights (5),
+arrowSignsActive (6),
+slowMovingVehicle (7),
+freqStops (8),
+reserved (9) -- for future use
+}
+
+
+WiperStatusFront ::= ENUMERATED {
+unavailable (0), -- Not Equipped with wiper status
+-- or wiper status is unavailable
+off (1),
+intermittent (2),
+low (3),
+high (4),
+washerInUse (126), -- washing solution being used
+automaticPresent (127), -- Auto wiper equipped
+... -- # LOCAL_CONTENT
+}
+
+WiperRate ::= INTEGER (0..127) -- units of sweeps per minute
+
+WiperStatusRear ::= ENUMERATED {
+unavailable (0), -- Not Equipped with wiper status
+-- or wiper status is unavailable
+off (1),
+intermittent (2),
+low (3),
+high (4),
+washerInUse (126), -- washing solution being used
+automaticPresent (127), -- Auto wipper equipped
+... -- # LOCAL_CONTENT
+}
+
+
+BrakeSystemStatus ::= OCTET STRING (SIZE(2))
+-- Encoded with the packed content of:
+-- SEQUENCE {
+-- wheelBrakes BrakeAppliedStatus,
+-- -x- 4 bits
+-- wheelBrakesUnavailable BOOL
+-- -x- 1 bit (1=true)
+-- spareBit
+-- -x- 1 bit, set to zero
+-- traction TractionControlState,
+-- -x- 2 bits
+-- abs AntiLockBrakeStatus,
+-- -x- 2 bits
+-- scs StabilityControlStatus,
+-- -x- 2 bits
+-- brakeBoost BrakeBoostApplied,
+-- -x- 2 bits
+-- auxBrakes AuxiliaryBrakeStatus,
+-- -x- 2 bits
+-- }
+
+
+BrakeAppliedPressure ::= ENUMERATED {
+unavailable (0), -- B'0000 Not Equipped
+-- or Brake Pres status is unavailable
+minPressure (1), -- B'0001 Minimum Braking Pressure
+bkLvl-2 (2), -- B'0010
+bkLvl-3 (3), -- B'0011
+bkLvl-4 (4), -- B'0100
+bkLvl-5 (5), -- B'0101
+bkLvl-6 (6), -- B'0110
+bkLvl-7 (7), -- B'0111
+bkLvl-8 (8), -- B'1000
+bkLvl-9 (9), -- B'1001
+bkLvl-10 (10), -- B'1010
+bkLvl-11 (11), -- B'1011
+bkLvl-12 (12), -- B'1100
+bkLvl-13 (13), -- B'1101
+bkLvl-14 (14), -- B'1110
+maxPressure (15) -- B'1111 Maximum Braking Pressure
+}
+-- Encoded as a 4 bit value
+
+CoefficientOfFriction ::= INTEGER (0..50)
+-- where 0 = 0.00 micro (frictonless)
+-- and 50 = 0.98 micro, in steps of 0.02
+
+SunSensor ::= INTEGER (0..1000)
+-- units of watts / m2
+
+RainSensor ::= ENUMERATED {
+none (0),
+lightMist (1),
+heavyMist (2),
+lightRainOrDrizzle (3),
+rain (4),
+moderateRain (5),
+heavyRain (6),
+heavyDownpour (7)
+}
+
+
+AmbientAirPressure ::= INTEGER (0..255)
+-- 8 Bits in hPa starting at 580 with a resolution of
+-- 2 hPa resulting in a range of 580 to 1090
+
+SteeringWheelAngle ::= OCTET STRING (SIZE(1))
+-- LSB units of 1.5 degrees.
+-- a range of -189 to +189 degrees
+-- 0x01 = 00 = +1.5 deg
+-- 0x81 = -126 = -189 deg and beyond
+-- 0x7E = +126 = +189 deg and beyond
+-- 0x7F = +127 to be used for unavailable
+
+SteeringWheelAngleConfidence ::= ENUMERATED {
+unavailable (0), -- B'00 Not Equipped with Wheel angle
+-- or Wheel angle status is unavailable
+prec2deg (1), -- B'01 2 degrees
+prec1deg (2), -- B'10 1 degree
+prec0-02deg (3) -- B'11 0.02 degrees
+}
+-- Encoded as a 2 bit value
+
+SteeringWheelAngleRateOfChange ::= INTEGER (-127..127)
+-- LSB is 3 degrees per second
+
+DrivingWheelAngle ::= INTEGER (-127..127)
+-- LSB units of 0.3333 degrees.
+-- a range of 42.33 degrees each way
+
+AccelerationSet4Way ::= OCTET STRING (SIZE(7))
+-- composed of the following:
+-- SEQUENCE {
+-- long Acceleration, -x- Along the Vehicle Longitudinal axis
+-- lat Acceleration, -x- Along the Vehicle Lateral axis
+-- vert VerticalAcceleration, -x- Along the Vehicle Vertical axis
+-- yaw YawRate
+-- }
+
+VerticalAccelerationThreshold ::= BIT STRING {
+allOff (0), -- B'0000 The condition All Off or not equipped
+leftFront (1), -- B'0001 Left Front Event
+leftRear (2), -- B'0010 Left Rear Event
+rightFront (4), -- B'0100 Right Front Event
+rightRear (8) -- B'1000 Right Rear Event
+} -- to fit in 4 bits
+
+
+YawRateConfidence ::= ENUMERATED {
+unavailable (0), -- B'000 Not Equipped with yaw rate status
+-- or yaw rate status is unavailable
+degSec-100-00 (1), -- B'001 100 deg/sec
+degSec-010-00 (2), -- B'010 10 deg/sec
+degSec-005-00 (3), -- B'011 5 deg/sec
+degSec-001-00 (4), -- B'100 1 deg/sec
+degSec-000-10 (5), -- B'101 0.1 deg/sec
+degSec-000-05 (6), -- B'110 0.05 deg/sec
+degSec-000-01 (7) -- B'111 0.01 deg/sec
+}
+-- Encoded as a 3 bit value
+
+
+AccelerationConfidence ::= ENUMERATED {
+unavailable (0), -- B'000 Not Equipped or data is unavailable
+accl-100-00 (1), -- B'001 100 meters / second squared
+accl-010-00 (2), -- B'010 10 meters / second squared
+accl-005-00 (3), -- B'011 5 meters / second squared
+accl-001-00 (4), -- B'100 1 meters / second squared
+accl-000-10 (5), -- B'101 0.1 meters / second squared
+accl-000-05 (6), -- B'110 0.05 meters / second squared
+accl-000-01 (7) -- B'111 0.01 meters / second squared
+}
+-- Encoded as a 3 bit value
+
+ConfidenceSet ::= SEQUENCE {
+accelConfidence AccelSteerYawRateConfidence OPTIONAL,
+speedConfidence SpeedandHeadingandThrottleConfidence OPTIONAL,
+timeConfidence TimeConfidence OPTIONAL,
+posConfidence PositionConfidenceSet OPTIONAL,
+steerConfidence SteeringWheelAngleConfidence OPTIONAL,
+throttleConfidence ThrottleConfidence OPTIONAL,
+... -- # LOCAL_CONTENT
+}
+
+ObstacleDistance ::= INTEGER (0..32767) -- LSB units of meters
+ObstacleDirection ::= Heading -- Use the header DE for this unless it proves different.
+
+ThrottlePosition ::= INTEGER (0..200) -- LSB units are 0.5 percent
+
+SpeedConfidence ::= ENUMERATED {
+unavailable (0), -- B'000 Not Equipped or unavailable
+prec100ms (1), -- B'001 100 meters / sec
+prec10ms (2), -- B'010 10 meters / sec
+prec5ms (3), -- B'011 5 meters / sec
+prec1ms (4), -- B'100 1 meters / sec
+prec0-1ms (5), -- B'101 0.1 meters / sec
+prec0-05ms (6), -- B'110 0.05 meters / sec
+prec0-01ms (7) -- B'111 0.01 meters / sec
+}
+-- Encoded as a 3 bit value
+
+VehicleHeight ::= INTEGER (0..127)
+-- the height of the vehicle
+-- LSB units of 5 cm, range to 6.35 meters
+
+BumperHeights ::= SEQUENCE {
+frnt BumperHeightFront,
+rear BumperHeightRear
+}
+
+VehicleMass ::= INTEGER (1..127) -- mass with an LSB of 50 Kg
+
+J1939data ::= SEQUENCE {
+-- Tire conditions
+tires SEQUENCE (SIZE(0..16)) OF SEQUENCE {
+location TireLocation OPTIONAL,
+pressure TirePressure OPTIONAL,
+temp TireTemp OPTIONAL,
+wheelSensorStatus WheelSensorStatus OPTIONAL,
+wheelEndElectFault WheelEndElectFault OPTIONAL,
+leakageRate TireLeakageRate OPTIONAL,
+detection TirePressureThresholdDetection OPTIONAL,
+...
+} OPTIONAL,
+-- Vehicle Weight by axle
+axle SEQUENCE (SIZE(0..16)) OF SEQUENCE {
+location AxleLocation OPTIONAL,
+weight AxleWeight OPTIONAL,
+...
+} OPTIONAL,
+trailerWeight TrailerWeight OPTIONAL,
+cargoWeight CargoWeight OPTIONAL,
+steeringAxleTemperature SteeringAxleTemperature OPTIONAL,
+driveAxleLocation DriveAxleLocation OPTIONAL,
+driveAxleLiftAirPressure DriveAxleLiftAirPressure OPTIONAL,
+driveAxleTemperature DriveAxleTemperature OPTIONAL,
+driveAxleLubePressure DriveAxleLubePressure OPTIONAL,
+steeringAxleLubePressure SteeringAxleLubePressure OPTIONAL,
+...
+}
+
+TireLocation ::= INTEGER (0..255)
+
+TirePressure ::= INTEGER (0..1000)
+
+TireTemp ::= INTEGER (0..65535)
+
+WheelSensorStatus ::= ENUMERATED {
+off (0),
+on (1),
+notDefined (2),
+notSupoprted (3)
+}
+
+WheelEndElectFault ::= BIT STRING {
+bitOne (1),
+bitTwo (2),
+bitThree (3),
+bitFour (4)
+}
+
+
+TireLeakageRate ::= INTEGER (0..65535)
+
+TirePressureThresholdDetection ::= ENUMERATED {
+noData (0), -- B'000'
+overPressure (1), -- B'001'
+noWarningPressure (2), -- B'010'
+underPressure (3), -- B'011'
+extremeUnderPressure (4), -- B'100'
+undefined (5), -- B'101'
+errorIndicator (6), -- B'110'
+notAvailable (7), -- B'111'
+... -- # LOCAL_CONTENT
+}
+
+AxleLocation ::= INTEGER (0..127)
+
+AxleWeight ::= INTEGER (0..65535)
+
+TrailerWeight ::= INTEGER (0..65535)
+
+CargoWeight ::= INTEGER (0..65535)
+
+SteeringAxleTemperature ::= INTEGER (0..255)
+
+DriveAxleLocation ::= INTEGER (0..255)
+
+DriveAxleLiftAirPressure ::= INTEGER (0..1000)
+
+DriveAxleTemperature ::= INTEGER (-40..210)
+
+DriveAxleLubePressure ::= INTEGER (0..1000)
+
+SteeringAxleLubePressure ::= INTEGER (0..255)
+
+EssPrecipYesNo ::= ENUMERATED {precip (1), noPrecip (2), error (3)}
+
+EssPrecipRate ::= INTEGER (0..65535)
+
+EssPrecipSituation ::= ENUMERATED {
+other (1),
+unknown (2),
+noPrecipitation (3),
+unidentifiedSlight (4),
+unidentifiedModerate (5),
+unidentifiedHeavy (6),
+snowSlight (7),
+snowModerate (8),
+snowHeavy (9),
+rainSlight (10),
+rainModerate (11),
+rainHeavy (12),
+frozenPrecipitationSlight (13),
+frozenPrecipitationModerate (14),
+frozenPrecipitationHeavy (15)
+}
+
+EssSolarRadiation ::= INTEGER (0..65535)
+
+EssMobileFriction ::= INTEGER (0..101)
+
+GPSstatus ::= BIT STRING {
+unavailable (0), -- Not Equipped or unavailable
+isHealthy (1),
+isMonitored (2),
+baseStationType (3), -- Set to zero if a moving base station,
+-- set to one if it is a fixed base station
+aPDOPofUnder5 (4), -- A dilution of precision greater then 5
+inViewOfUnder5 (5), -- Less then 5 satellites in view
+localCorrectionsPresent (6),
+networkCorrectionsPresent (7)
+} -- (SIZE(1))
+
+ITIScodesAndText ::= SEQUENCE (SIZE(1..100)) OF SEQUENCE {
+item CHOICE {
+itis ITIScodes,
+text ITIStext
+} -- # UNTAGGED
+}
+
+ITIScodes ::= INTEGER (0..65565)
+-- The defined list of ITIS codes is too long to list here
+-- Many smaller lists use a sub-set of these codes as defined elements
+-- Also enumerated values expressed as text constant are very common,
+-- and in many deployments the list codes are used as a shorthand for
+-- this text. Also the XML expressions commonly use a union of the
+-- code values and the textual expressions.
+-- Consult SAE J2540 for further details.
+
+ITIStext ::= IA5String (SIZE(1..500))
+
+PathHistoryPointType-01 ::= SEQUENCE {
+latOffset INTEGER (-131072..131071),
+-- in 1/10th micro degrees
+-- value 131071 to be used for 131071 or greater
+-- value -131071 to be used for -131071 or less
+-- value -131072 to be used for unavailable lat or long
+longOffset INTEGER (-131072..131071),
+-- in 1/10th micro degrees
+-- value 131071 to be used for 131071 or greater
+-- value -131071 to be used for -131071 or less
+-- value -131072 to be used for unavailable lat or long
+elevationOffset INTEGER (-2048..2047) OPTIONAL,
+-- LSB units of of 10 cm
+-- value 2047 to be used for 2047 or greater
+-- value -2047 to be used for -2047 or greater
+-- value -2048 to be unavailable
+timeOffset INTEGER (1..65535) OPTIONAL,
+-- LSB units of of 10 mSec
+-- value 65534 to be used for 65534 or greater
+-- value 65535 to be unavailable
+posAccuracy PositionalAccuracy OPTIONAL,
+-- four packed bytes
+heading INTEGER (-128..127) OPTIONAL,
+-- where the LSB is in
+-- units of 1.5 degrees
+-- value -128 for unavailable
+-- not an offset value
+speed TransmissionAndSpeed OPTIONAL
+-- upper bits encode transmission
+-- where the LSB is in
+-- units of 0.02 m/s
+-- not an offset value
+}
+
+AmbientAirTemperature ::= INTEGER (0..191) -- in deg C with a -40 offset
+
+AccelSteerYawRateConfidence ::= SEQUENCE {
+yawRate YawRateConfidence,
+-- 3 bits
+acceleration AccelerationConfidence,
+-- 3 bits
+steeringWheelAngle SteeringWheelAngleConfidence
+-- 2 bits
+}
+
+ThrottleConfidence ::= ENUMERATED {
+unavailable (0), -- B'00 Not Equipped or unavailable
+prec10percent (1), -- B'01 10 percent Confidence level
+prec1percent (2), -- B'10 1 percent Confidence level
+prec0-5percent (3) -- B'11 0.5 percent Confidence level
+}
+-- Encoded as a 2 bit value
+
+BumperHeightFront ::= INTEGER (0..127) -- in units of 0.01 meters from ground surface.
+BumperHeightRear ::= INTEGER (0..127) -- in units of 0.01 meters from ground surface.
+
+END

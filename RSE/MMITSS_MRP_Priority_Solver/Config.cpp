@@ -1,9 +1,10 @@
-//**********************************************************************************
-//
-// © 2015 Arizona Board of Regents on behalf of the University of Arizona with rights
-//       granted for USDOT OSADP distribution with the Apache 2.0 open source license.
-//
-//**********************************************************************************
+/*NOTICE:  Copyright 2014 Arizona Board of Regents on behalf of University of Arizona.
+ * All information, intellectual, and technical concepts contained herein is and shall
+ * remain the proprietary information of Arizona Board of Regents and may be covered
+ * by U.S. and Foreign Patents, and patents in process.  Dissemination of this information
+ * or reproduction of this material is strictly forbidden unless prior written permission
+ * is obtained from Arizona Board of Regents or University of Arizona.
+ */   
 
 /*  Config.cpp 
 *  Created by Mehdi Zamanipour
@@ -43,7 +44,8 @@ void PrintRSUConfig()
     cout<<"Coordination Weight: "<< ConfigIS.dCoordinationWeight<<endl;
     cout<<"Coordinate Phase: ";  PrintArray<int>( ConfigIS.iCoordinatedPhase,2);
     cout<<"Coordination Cycle: "<< ConfigIS.iCoordinationCycle<<endl;
-    cout<<"Coordination Split: "<< ConfigIS.iCoordinationSplit<<endl;
+    cout<<"Coordination Split phase 1: "<< ConfigIS.dCoordinationSplit[0]<<endl;
+    cout<<"Coordination Split phase 2: "<< ConfigIS.dCoordinationSplit[1]<<endl;
     cout<<"Coordination Offset: "<< ConfigIS.iCoordinationOffset<<endl;
     cout<<"Transit Weight: " << ConfigIS.iTransitWeight<<endl;
     cout<<"Truck Weight: " <<ConfigIS.iTruckWeight<<endl;
@@ -65,10 +67,11 @@ void PrintRSUConfig(RSU_Config configIS)
     cout<<"Red:     "; PrintArray<double>(configIS.Red,8);
     cout<<"Gmin:    "; PrintArray<double>(configIS.Gmin,8);
     cout<<"Gmax:    "; PrintArray<double>(configIS.Gmax,8);
-     cout<<"Coordination Weight: "<< configIS.dCoordinationWeight<<endl;
+    cout<<"Coordination Weight: "<< configIS.dCoordinationWeight<<endl;
     cout<<"Coordinate Phase: ";  PrintArray<int>( configIS.iCoordinatedPhase,2);
     cout<<"Coordination Cycle: "<< configIS.iCoordinationCycle<<endl;
-    cout<<"Coordination Split: "<< configIS.iCoordinationSplit<<endl;
+    cout<<"Coordination Split phase 1: "<< configIS.dCoordinationSplit[0]<<endl;
+    cout<<"Coordination Split phase 2: "<< configIS.dCoordinationSplit[1]<<endl;
     cout<<"Coordination Offset: "<< configIS.iCoordinationOffset<<endl;
     cout<<"Transit Weight: " << configIS.iTransitWeight<<endl;
     cout<<"Truck Weight: " <<configIS.iTruckWeight<<endl;
@@ -350,7 +353,7 @@ void ReadInConfig(char *filename, char* filename2)
 
     int PhaseNo;
     int PhaseSeq[8];
-    char TempStr[16];
+    char TempStr[255];
     string lineread;
     vector<int> P11,P12,P21,P22;
 
@@ -424,7 +427,7 @@ void ReadInConfig(char *filename, char* filename2)
     double iTruckWeight;
     int iCoordinationOffset;
     int iCoordinationCycle;
-    int iCoordinationSplit;
+    double dCoordSplit[2];
     
     //----------------- Read in the parameters---------------
     while(!FileRead2.eof())
@@ -434,25 +437,42 @@ void ReadInConfig(char *filename, char* filename2)
         if (lineread.size()!=0)
         {
             sscanf(lineread.c_str(),"%s",TempStr);
-            if(strcmp(TempStr,"coordination")==0)
+            if(strcmp(TempStr,"coordination_weight")==0)
             {					
-                sscanf(lineread.c_str(),"%*s %lf ",&dCoordinationWeight);
+			    sscanf(lineread.c_str(),"%*s %lf ",&dCoordinationWeight);
             }
             else if(strcmp(TempStr,"cycle")==0)
             {
-                sscanf(lineread.c_str(),"%*s %d ",&iCoordinationCycle );
+			    sscanf(lineread.c_str(),"%*s %d ",&iCoordinationCycle );
             }
             else if(strcmp(TempStr,"offset")==0)
             {
-                sscanf(lineread.c_str(),"%*s %d ",&iCoordinationOffset );
+			    sscanf(lineread.c_str(),"%*s %d ",&iCoordinationOffset );
             }
-            else if(strcmp(TempStr,"split")==0)
+            
+            else if(strcmp(TempStr,"coordinated_phases_number")==0)
             {
-                sscanf(lineread.c_str(),"%*s %d ",&iCoordinationSplit );
-            }
-            else if(strcmp(TempStr,"coordinated_phase")==0)
-            {
-                sscanf(lineread.c_str(),"%*s %d %d ",&iCoordinatedPhase[0],&iCoordinatedPhase[1] );
+				int iNumber_of_Phases=0;
+				sscanf(lineread.c_str(),"%*s %d ",&iNumber_of_Phases);
+				for (int cnt=0;cnt<iNumber_of_Phases;cnt++)
+				{
+					getline(FileRead2,lineread);
+					sscanf(lineread.c_str(),"%s",TempStr);
+					if(strcmp(TempStr,"coordinated_phase1")==0)
+						sscanf(lineread.c_str(),"%*s %ld ",&iCoordinatedPhase[0]);
+					if (strcmp(TempStr,"coordinated_phase2")==0)
+						sscanf(lineread.c_str(),"%*s %ld ",&iCoordinatedPhase[1] );
+				}
+				for (int cnt=0;cnt<iNumber_of_Phases;cnt++)
+				{
+					getline(FileRead2,lineread);
+					 sscanf(lineread.c_str(),"%s",TempStr);
+					if(strcmp(TempStr,"coordinated_phase1_split")==0)
+						sscanf(lineread.c_str(),"%*s %lf ",&dCoordSplit[0]);
+		
+					if (strcmp(TempStr,"coordinated_phase2_split")==0)
+						sscanf(lineread.c_str(),"%*s %lf ",&dCoordSplit[1] );
+				}
             }
             else if(strcmp(TempStr,"transit_weight")==0)
             {
@@ -466,7 +486,6 @@ void ReadInConfig(char *filename, char* filename2)
     }
      FileRead2.close();
      
-     
     ConfigIS.dCoordinationWeight=dCoordinationWeight;
     ConfigIS.iCoordinatedPhase[0]=iCoordinatedPhase[0];
     ConfigIS.iCoordinatedPhase[1]=iCoordinatedPhase[1];
@@ -474,7 +493,8 @@ void ReadInConfig(char *filename, char* filename2)
     ConfigIS.iTruckWeight=iTruckWeight;
     ConfigIS.iCoordinationCycle=iCoordinationCycle;
     ConfigIS.iCoordinationOffset=iCoordinationOffset;
-    ConfigIS.iCoordinationSplit=iCoordinationSplit;
+    ConfigIS.dCoordinationSplit[0]=dCoordSplit[0];
+    ConfigIS.dCoordinationSplit[1]=dCoordSplit[1];
    
     
     //-------------Handle the parameters for non-complete phases case----// 

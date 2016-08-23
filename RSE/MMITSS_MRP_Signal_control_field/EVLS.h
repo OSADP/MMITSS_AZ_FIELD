@@ -1,22 +1,3 @@
-//**********************************************************************************
-//
-// © 2015 Arizona Board of Regents on behalf of the University of Arizona with rights
-//       granted for USDOT OSADP distribution with the Apache 2.0 open source license.
-//
-//**********************************************************************************
-
-
-/*  EVLS.h 
-*  Created by Yiheng Feng 
-*  University of Arizona   
-*  ATLAS Research Center 
-*  College of Engineering
-*
-*  This code was develop under the supervision of Professor Larry Head
-*  in the ATLAS Research Center.
-
-*/
-
 #include <stdio.h>
 #include <vector>
 #include <fstream>
@@ -265,14 +246,14 @@ void EVLS(int phase_est, long current_time, float red_elapse_time, int No_lanes)
 	sprintf(temp_log,"Vehicle list after adding virtual queuing vehicle is:\n");
 	outputlog(temp_log);cout<<temp_log;
 	
-	sorted_vehlist.Reset();
-	cout.precision(12);
-	while(!sorted_vehlist.EndOfList())  
-	{
-		sprintf(temp_log,"%d %f %f %f\n",sorted_vehlist.Data().lane,sorted_vehlist.Data().stopBarDistance,sorted_vehlist.Data().Speed,sorted_vehlist.Data().time_stop);
-		outputlog(temp_log);cout<<temp_log;
-		sorted_vehlist.Next();
-	}
+	//~ sorted_vehlist.Reset();
+	//~ cout.precision(12);
+	//~ while(!sorted_vehlist.EndOfList())  
+	//~ {
+		//~ sprintf(temp_log,"%d %f %f %f\n",sorted_vehlist.Data().lane,sorted_vehlist.Data().stopBarDistance,sorted_vehlist.Data().Speed,sorted_vehlist.Data().time_stop);
+		//~ outputlog(temp_log);cout<<temp_log;
+		//~ sorted_vehlist.Next();
+	//~ }
 
 	
 	//Step2: Calculate the slow-down part of each lane
@@ -463,18 +444,18 @@ void EVLS(int phase_est, long current_time, float red_elapse_time, int No_lanes)
 //	fstream fp;
 //	fp.open("estimated_vehlist.txt",fstream::out);
 
-	sorted_vehlist.Reset();
-
-	while(!sorted_vehlist.EndOfList())  
-	{
-		sprintf(temp_log,"%d %f %f %f %f\n",sorted_vehlist.Data().lane,sorted_vehlist.Data().stopBarDistance,sorted_vehlist.Data().Speed,sorted_vehlist.Data().acceleration,sorted_vehlist.Data().time_stop);
-		outputlog(temp_log);cout<<temp_log;
-
-		sorted_vehlist.Next();
-	}
+	//~ sorted_vehlist.Reset();
+//~ 
+	//~ while(!sorted_vehlist.EndOfList())  
+	//~ {
+		//~ sprintf(temp_log,"%d %f %f %f %f\n",sorted_vehlist.Data().lane,sorted_vehlist.Data().stopBarDistance,sorted_vehlist.Data().Speed,sorted_vehlist.Data().acceleration,sorted_vehlist.Data().time_stop);
+		//~ outputlog(temp_log);cout<<temp_log;
+//~ 
+		//~ sorted_vehlist.Next();
+	//~ }
 //		fp.close();
 
-	cout<<"I am here1"<<endl;
+	//cout<<"I am here1"<<endl;
 
 	//write to the corresponding column of arrival table
 	sorted_vehlist.Reset();
@@ -495,7 +476,8 @@ void EVLS(int phase_est, long current_time, float red_elapse_time, int No_lanes)
 		if (sorted_vehlist.Data().Speed>2)  //stopped vehicle
 		{
 			int ETA= ceil(sorted_vehlist.Data().stopBarDistance/sorted_vehlist.Data().Speed);
-			ArrivalTable[ETA][phase_est-1]++;     //increase the value in ETA's row
+			if (ETA<=50)
+				ArrivalTable[ETA][phase_est-1]++;     //increase the value in ETA's row
 		}
 		sorted_vehlist.Next();
 	}

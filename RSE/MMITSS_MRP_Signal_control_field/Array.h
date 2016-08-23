@@ -1,11 +1,3 @@
-//**********************************************************************************
-//
-// © 2015 Arizona Board of Regents on behalf of the University of Arizona with rights
-//       granted for USDOT OSADP distribution with the Apache 2.0 open source license.
-//
-//**********************************************************************************
-
-
 #pragma once
 //  Solution from : TestConfig 
 #include <time.h>
@@ -14,6 +6,8 @@
 #include <fstream>
 #include <math.h>
 #include <vector>
+#include <stdlib.h>
+#include <string.h>
 
 using namespace std;
 

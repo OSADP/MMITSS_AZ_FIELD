@@ -1,0 +1,268 @@
+/* Test ASN.1 module */
+MyModule DEFINITIONS AUTOMATIC TAGS::=
+BEGIN
+
+ SRMtype ::= SEQUENCE {
+          msgID DSRCmsgID,
+          msgCnt MsgCount,
+           -- Request Data
+          request SignalRequest,
+          timeOfService DTime OPTIONAL,
+          -- the time in the near future when service is
+          -- requested to start
+          endOfService DTime OPTIONAL,
+          transitStatus TransitStatus OPTIONAL,
+          vehicleVIN VehicleIdent OPTIONAL,
+          vehicleData BSMblob,
+          -- current position data about the vehicle
+          status VehicleRequestStatus OPTIONAL,
+          -- current status data about the vehicle
+        ...
+	}
+DSRCmsgID ::= ENUMERATED {
+     reserved (0),
+     alaCarteMessage (1), -- ACM
+     basicSafetyMessage (2), -- BSM, heartbeat msg
+     basicSafetyMessageVerbose (3), -- used for testing only
+     commonSafetyRequest (4), -- CSR
+     emergencyVehicleAlert (5), -- EVA
+     intersectionCollisionAlert (6), -- ICA
+     mapData (7), -- MAP, GID, intersections
+     nmeaCorrections (8), -- NMEA
+     probeDataManagement (9), -- PDM
+     probeVehicleData (10), -- PVD
+     roadSideAlert (11), -- RSA
+     rtcmCorrections (12), -- RTCM
+     signalPhaseAndTimingMessage (13), -- SPAT
+     signalRequestMessage (14), -- SRM
+     signalStatusMessage (15), -- SSM
+     travelerInformation (16), -- TIM
+... -- # LOCAL_CONTENT
+}
+
+MsgCount ::= INTEGER (0..127)
+
+SignalRequest ::= SEQUENCE {
+-- the regionally unique ID of the target intersection
+id IntersectionID, -- intersection ID
+-- Below present only when canceling a prior request
+isCancel SignalReqScheme OPTIONAL,
+requestedAction SignalReqScheme OPTIONAL,
+inLane LaneNumber OPTIONAL,
+-- approach Lane
+outLane LaneNumber OPTIONAL,
+type NTCIPVehicleclass,
+-- Two 4 bit nibbles as:
+-- NTCIP vehicle class type
+-- NTCIP vehicle class level
+-- any validation string used by the system
+codeWord CodeWord OPTIONAL,
+...
+}
+
+IntersectionID ::= OCTET STRING (SIZE(2..4))
+SignalReqScheme ::= OCTET STRING (SIZE(1))
+LaneNumber ::= OCTET STRING (SIZE(1))
+NTCIPVehicleclass ::= OCTET STRING (SIZE(1))
+CodeWord ::= OCTET STRING (SIZE(1..16))
+
+DTime ::= SEQUENCE {
+hour DHour, -- 1 byte
+minute DMinute, -- 1 byte
+second DSecond -- 2 bytes
+}
+DHour ::= INTEGER (0..31) -- units of hours
+DMinute ::= INTEGER (0..63) -- units of minutes
+DSecond ::= INTEGER (0..65535) -- units of miliseconds
+TransitStatus ::= BIT STRING {
+    none (0), -- nothing is active
+    anADAuse (1), -- an ADA access is in progress (wheelchairs, kneling, etc.)
+    aBikeLoad (2), -- loading of a bicyle is in progress
+    doorOpen (3), -- a vehicle door is open for passenger    access
+    occM (4),
+    occL (5)
+} (SIZE(6))
+
+VehicleIdent ::= SEQUENCE {
+     name DescriptiveName OPTIONAL,
+     -- a human readable name for debugging use
+     vin VINstring OPTIONAL,
+     -- vehicle VIN value
+     ownerCode IA5String(SIZE(1..32)) OPTIONAL,
+     -- vehicle owner code
+     id TemporaryID OPTIONAL,
+      -- same value used in the BSM
+     vehicleType VehicleType OPTIONAL,
+     vehicleClass CHOICE
+       {
+        vGroup ENUMERATED {
+         all-vehicles (9217),
+         bicycles (9218),
+         motorcycles (9219), -- to include mopeds 
+         cars (9220), -- (remapped from ERM value 
+         light-vehicles (9221),
+         cars-and-light-vehicles (9222),
+         cars-with-trailers (9223),
+         cars-with-recreational-trailers (9224),
+         vehicles-with-trailers (9225),
+         heavy-vehicles (9226),
+         trucks (9227),
+         buses (9228),
+        articulated-buses (9229),
+        school-buses (9230),
+        vehicles-with-semi-trailers (9231),
+        vehicles-with-double-trailers (9232), -- Alternative  
+        high-profile-vehicles (9233),
+        wide-vehicles (9234),
+        long-vehicles (9235),
+        hazardous-loads (9236),
+        exceptional-loads (9237),
+        abnormal-loads (9238),
+        convoys (9239),
+        maintenance-vehicles (9240),delivery-vehicles (9241),
+        vehicles-with-even-numbered-license-plates (9242),
+        vehicles-with-odd-numbered-license-plates (9243),
+     vehicles-with-parking-permits (9244),
+     vehicles-with-catalytic-converters (9245),
+     vehicles-without-catalytic-converters (9246),
+     gas-powered-vehicles (9247),
+     diesel-powered-vehicles (9248),
+     lPG-vehicles (9249),
+     military-convoys (9250),
+     military-vehicles (9251),
+... -- # LOCAL_CONTENT_ITIS
+},
+        rGroup ENUMERATED {
+       emergency-vehicle-units (9729), -- Default phrase, to be used when one of
+-- the below does not fit better
+     federal-law-enforcement-units (9730),
+     state-police-units (9731),
+     county-police-units (9732), -- Hint: also sheriff response units
+      local-police-units (9733),
+     ambulance-units (9734),
+      rescue-units (9735),
+      fire-units (9736),
+      hAZMAT-units (9737),
+     light-tow-unit (9738),
+     heavy-tow-unit (9739),
+     freeway-service-patrols (9740),
+     transportation-response-units (9741),
+     private-contractor-response-units (9742),
+  ... -- # LOCAL_CONTENT_ITIS
+},
+        rEquip  ENUMERATED {
+ground-fire-suppression (9985),
+heavy-ground-equipment (9986),
+aircraft (9988),
+marine-equipment (9989),
+support-equipment (9990),
+medical-rescue-unit (9991),
+other (9993), -- Depreciated by fire standards, do not
+-- use
+ground-fire-suppression-other (9994),
+engine (9995),
+truck-or-aerial (9996),
+quint (9997), -- A five-function type of fire apparatus.
+-- The units in the movie Backdraft were
+-- quints
+tanker-pumper-combination (9998),
+brush-truck (10000),
+aircraft-rescue-firefighting (10001),
+heavy-ground-equipment-other (10004),
+dozer-or-plow (10005),
+tractor (10006),
+tanker-or-tender (10008),
+aircraft-other (10024),
+aircraft-fixed-wing-tanker (10025),
+helitanker (10026),
+helicopter (10027),
+marine-equipment-other (10034),
+fire-boat-with-pump (10035),
+boat-no-pump (10036),
+support-apparatus-other (10044),
+breathing-apparatus-support (10045),
+light-and-air-unit (10046),
+medical-rescue-unit-other (10054),
+rescue-unit (10055),
+urban-search-rescue-unit (10056),
+high-angle-rescue (10057),
+crash-fire-rescue (10058),
+bLS-unit (10059),
+aLS-unit (10060),
+mobile-command-post (10075), -- Depreciated, do not use
+chief-officer-car (10076),
+hAZMAT-unit (10077),
+type-i-hand-crew (10078),
+type-ii-hand-crew (10079),
+privately-owned-vehicle (10083), -- (Often found in volunteer fire teams)
+other-apparatus-resource (10084), -- (Remapped from fire code zero)
+ambulance (10085),
+bomb-squad-van (10086),
+combine-harvester (10087),
+construction-vehicle (10088),
+farm-tractor (10089),
+grass-cutting-machines (10090),
+hAZMAT-containment-tow (10091),
+heavy-tow (10092),
+light-tow (10094),
+flatbed-tow (10114),
+hedge-cutting-machines (10093),
+mobile-crane (10095),
+refuse-collection-vehicle (10096),
+resurfacing-vehicle (10097),
+road-sweeper (10098),
+roadside-litter-collection-crews (10099),
+salvage-vehicle (10100),
+sand-truck (10101),
+snowplow (10102),
+steam-roller (10103),
+swat-team-van (10104),
+track-laying-vehicle (10105),
+unknown-vehicle (10106),
+white-lining-vehicle (10107), -- Consider using Roadwork "road marking
+-- operations" unless the objective is to
+-- refer to the specific vehicle of this
+-- type. Alternative Rendering: line
+-- painting vehicle
+dump-truck (10108),
+supervisor-vehicle (10109),
+snow-blower (10110),
+rotary-snow-blower (10111),
+road-grader (10112), -- Alternative term: motor grader
+steam-truck (10113), -- A special truck that thaws culverts and
+-- storm drains
+... -- # LOCAL_CONTENT_ITIS
+}
+      } OPTIONAL,
+... -- # LOCAL_CONTENT
+}
+DescriptiveName ::= IA5String (SIZE(1..63))
+VINstring ::= OCTET STRING (SIZE(1..17))
+TemporaryID ::= OCTET STRING (SIZE(4))
+VehicleType ::= ENUMERATED {
+none (0), -- Not Equipped, Not known or unavailable
+unknown (1), -- Does not fit any other category
+special (2), -- Special use
+moto (3), -- Motorcycle
+car (4), -- Passenger car
+carOther (5), -- Four tire single units
+bus (6), -- Buses
+axleCnt2 (7), -- Two axle, six tire single units
+axleCnt3 (8), -- Three axle, single units
+axleCnt4 (9), -- Four or more axle, single unit
+axleCnt4Trailer (10), -- Four or less axle, single trailer
+axleCnt5Trailer (11), -- Five or less axle, single trailer
+axleCnt6Trailer (12), -- Six or more axle, single trailer
+axleCnt5MultiTrailer (13), -- Five or less axle, multi-trailer
+axleCnt6MultiTrailer (14), -- Six axle, multi-trailer
+axleCnt7MultiTrailer (15), -- Seven or more axle, multi-trailer
+... -- # LOCAL_CONTENT
+}
+
+
+BSMblob ::= OCTET STRING (SIZE(38))
+
+
+
+VehicleRequestStatus ::= OCTET STRING (SIZE(1))
+END
